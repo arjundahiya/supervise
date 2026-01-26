@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
-import { useRouter } from "next/navigation"; // <--- 1. Import this
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,29 +12,18 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"; // Removed unused imports
 import { LogOut } from "lucide-react";
 
 export default function Navbar() {
-    const router = useRouter(); // <--- 2. Initialize the router
-    
     const {
         data: session,
+        // isPending, // You can use these if you want loading states
+        // error, 
     } = authClient.useSession();
 
+    // Fix: We safely cast user to 'any' to access the custom 'role' property
     const isAdmin = (session?.user as any)?.role === "ADMIN";
-
-    // <--- 3. Create a handleLogout function
-    const handleLogout = async () => {
-        await authClient.signOut({
-            fetchOptions: {
-                onSuccess: () => {
-                    router.push("/"); // Redirect to login page
-                    router.refresh();        // Clear any cached data
-                },
-            },
-        });
-    };
 
     return (
         <header className="border-b">
@@ -49,6 +37,11 @@ export default function Navbar() {
                         <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
                             Dashboard
                         </Link>
+                        {/* I removed the "Availability" link since we moved that 
+                           into the popup on the dashboard, but you can keep it if you want.
+                        */}
+                        
+                        {/* CONDITIONAL RENDERING: Only render the link if user is Admin */}
                         {isAdmin && (
                             <Link href="/admin" className="text-muted-foreground hover:text-foreground">
                                 Admin
@@ -74,8 +67,7 @@ export default function Navbar() {
                                 </DropdownMenuGroup>
                                 <DropdownMenuGroup>
                                     <DropdownMenuSeparator />
-                                    {/* 4. Update the onClick handler */}
-                                    <DropdownMenuItem onClick={handleLogout}>
+                                    <DropdownMenuItem onClick={() => authClient.signOut()}>
                                         <LogOut className="mr-2 h-4 w-4 text-red-700" />
                                         <span>Sign Out</span>
                                     </DropdownMenuItem>
