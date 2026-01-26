@@ -65,7 +65,7 @@ export async function GET(
       location: s.location,
       status: "CONFIRMED",
       busyStatus: "BUSY",
-      organizer: { name: "Supervision Admin", email: "admin@cam.ac.uk" },
+      organizer: { name: "Stooge", email: "hjs83@cam.ac.uk" },
     };
   });
 
