@@ -10,23 +10,21 @@ import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuPortal,
     DropdownMenuSeparator,
-    DropdownMenuShortcut,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"; // Removed unused imports
 import { LogOut } from "lucide-react";
 
 export default function Navbar() {
     const {
         data: session,
-        isPending, //loading state
-        error, //error object
-        refetch //refetch the session
-    } = authClient.useSession()
+        // isPending, // You can use these if you want loading states
+        // error, 
+    } = authClient.useSession();
+
+    // Fix: We safely cast user to 'any' to access the custom 'role' property
+    const isAdmin = (session?.user as any)?.role === "ADMIN";
+
     return (
         <header className="border-b">
             <div className="mx-auto max-w-7xl px-6 h-14 flex items-center justify-between">
@@ -35,26 +33,31 @@ export default function Navbar() {
                         Supervise
                     </Link>
 
-
                     <nav className="hidden md:flex items-center gap-4 text-sm">
                         <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
                             Dashboard
                         </Link>
-                        <Link href="/availability" className="text-muted-foreground hover:text-foreground">
-                            Availability
-                        </Link>
-                        <Link hidden={session?.user.role !== "ADMIN"} href="/admin" className="text-muted-foreground hover:text-foreground">
-                            Admin
-                        </Link>
+                        {/* I removed the "Availability" link since we moved that 
+                           into the popup on the dashboard, but you can keep it if you want.
+                        */}
+                        
+                        {/* CONDITIONAL RENDERING: Only render the link if user is Admin */}
+                        {isAdmin && (
+                            <Link href="/admin" className="text-muted-foreground hover:text-foreground">
+                                Admin
+                            </Link>
+                        )}
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="sm">Help</Button>
-                    {session ?
+                    {session ? (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Avatar className="h-8 w-8 cursor-pointer">
-                                    <AvatarFallback>{session?.user.name.split(" ").map((n) => n[0]).join("")}</AvatarFallback>
+                                    <AvatarFallback>
+                                        {session?.user.name.split(" ").map((n) => n[0]).join("")}
+                                    </AvatarFallback>
                                 </Avatar>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
@@ -65,17 +68,20 @@ export default function Navbar() {
                                 <DropdownMenuGroup>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => authClient.signOut()}>
-                                        <LogOut className="text-red-700" />Sign Out
+                                        <LogOut className="mr-2 h-4 w-4 text-red-700" />
+                                        <span>Sign Out</span>
                                     </DropdownMenuItem>
                                 </DropdownMenuGroup>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        : <Button onClick={() => authClient.signIn.oauth2({
+                    ) : (
+                        <Button onClick={() => authClient.signIn.oauth2({
                             providerId: "raven",
                             scopes: ["openid", "email", "profile"]
-                        })}>Sign In</Button>}
+                        })}>Sign In</Button>
+                    )}
                 </div>
             </div>
         </header>
-    )
+    );
 }

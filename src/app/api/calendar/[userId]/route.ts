@@ -1,12 +1,13 @@
-export const dynamic = 'force-dynamic';
-
 import prisma from "@/lib/prisma";
 import { createEvents, EventAttributes } from "ics";
 import { NextRequest, NextResponse } from "next/server";
 
+// Ensure the calendar is always fresh when requested
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> } // Updated for Next.js 16 params
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   const { userId } = await params;
 
@@ -16,8 +17,7 @@ export async function GET(
       students: {
         some: { id: userId },
       },
-      // Only fetch future events or recent past? 
-      // Usually good to fetch everything from 1 month ago onwards
+      // Fetch everything from 1 month ago onwards
       startsAt: {
         gte: new Date(new Date().setMonth(new Date().getMonth() - 1)) 
       }
@@ -27,43 +27,54 @@ export async function GET(
     }
   });
 
+  // 2. Handle empty calendar case
   if (!supervisions || supervisions.length === 0) {
-    // Return empty calendar if no events
-    return new NextResponse("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//My App//EN\nEND:VCALENDAR", {
+    return new NextResponse(
+      "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//My App//EN\nEND:VCALENDAR", 
+      {
         headers: {
             "Content-Type": "text/calendar; charset=utf-8",
             "Content-Disposition": `attachment; filename="supervisions.ics"`,
         }
-    });
+      }
+    );
   }
 
-  // 2. Format for ICS
+  // 3. Format for ICS
   const events: EventAttributes[] = supervisions.map((s) => {
-    // ICS expects start/end as [year, month, day, hour, minute]
-    // Note: Month is 1-indexed in ICS, but 0-indexed in JS Date? 
-    // Actually ICS library handles Date objects or arrays. Arrays are safer.
     const start = new Date(s.startsAt);
     const end = new Date(s.endsAt);
 
     return {
-      start: [start.getFullYear(), start.getMonth() + 1, start.getDate(), start.getHours(), start.getMinutes()],
-      end: [end.getFullYear(), end.getMonth() + 1, end.getDate(), end.getHours(), end.getMinutes()],
+      start: [
+        start.getFullYear(), 
+        start.getMonth() + 1, 
+        start.getDate(), 
+        start.getHours(), 
+        start.getMinutes()
+      ],
+      end: [
+        end.getFullYear(), 
+        end.getMonth() + 1, 
+        end.getDate(), 
+        end.getHours(), 
+        end.getMinutes()
+      ],
       title: `Supervision: ${s.title}`,
       description: s.description || "No description provided",
       location: s.location,
       status: "CONFIRMED",
       busyStatus: "BUSY",
-      organizer: { name: "Stooge", email: "hjs83@cam.ac.uk" },
-      // Optional: List attendees (privacy warning: this exposes names in the calendar file)
-      // attendees: s.students.map(stu => ({ name: stu.full_name })) 
+      organizer: { name: "Supervision Admin", email: "admin@cam.ac.uk" },
     };
   });
 
-  // 3. Generate content
-  return new Promise((resolve) => {
+  // 4. Generate content wrapped in a Typed Promise
+  return new Promise<Response>((resolve) => {
     createEvents(events, (error, value) => {
       if (error) {
-        console.error(error);
+        console.error("ICS Generation Error:", error);
+        // Resolve with a 500 error response instead of rejecting
         resolve(new NextResponse("Error generating calendar", { status: 500 }));
         return;
       }
@@ -73,8 +84,7 @@ export async function GET(
           headers: {
             "Content-Type": "text/calendar; charset=utf-8",
             "Content-Disposition": `attachment; filename="supervisions.ics"`,
-            // Cache control is important so Google checks back
-            "Cache-Control": "public, max-age=3600, s-maxage=3600",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
           },
         })
       );
