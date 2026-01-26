@@ -43,8 +43,8 @@ export default function Navbar() {
                         <Link href="/availability" className="text-muted-foreground hover:text-foreground">
                             Availability
                         </Link>
-                        <Link href="/swaps" className="text-muted-foreground hover:text-foreground">
-                            Swaps
+                        <Link hidden={session?.user.role !== "ADMIN"} href="/admin" className="text-muted-foreground hover:text-foreground">
+                            Admin
                         </Link>
                     </nav>
                 </div>

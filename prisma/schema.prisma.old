@@ -1,0 +1,167 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "src/app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum AvailabilityType {
+  PERSONAL
+  GLOBAL
+}
+
+enum SwapStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  name          String?
+  image         String?
+  role          Role     @default(STUDENT)
+
+  /// Student relations
+  availabilities Availability[]
+  supervisions   Supervision[] @relation("SupervisionStudents")
+
+  /// Swap requests
+  swapRequestsMade     SwapRequest[] @relation("SwapRequester")
+  swapRequestsReceived SwapRequest[] @relation("SwapTarget")
+
+  /// Better Auth relations
+  sessions Session[]
+  accounts Account[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Better Auth Session model
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Better Auth Account model (for OAuth providers)
+model Account {
+  id                String    @id @default(uuid())
+  userId            String
+  accountId         String
+  providerId        String
+  accessToken       String?
+  refreshToken      String?
+  idToken           String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope             String?
+  password          String?
+  
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+// Better Auth Verification model (for email verification, password reset, etc.)
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@unique([identifier, value])
+}
+
+model Availability {
+  id        String @id @default(uuid())
+
+  type      AvailabilityType
+  userId    String?
+  user      User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Time window
+  startsAt DateTime
+  endsAt   DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([startsAt, endsAt])
+}
+
+model Supervision {
+  id        String @id @default(uuid())
+
+  title     String
+  description String?
+  location  String
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  /// Students assigned
+  students User[] @relation("SupervisionStudents")
+
+  /// Swap requests related to this supervision
+  swapRequests SwapRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startsAt, endsAt])
+}
+
+model SwapRequest {
+  id String @id @default(uuid())
+
+  supervisionId String
+  supervision   Supervision @relation(fields: [supervisionId], references: [id], onDelete: Cascade)
+
+  requesterId String
+  requester   User @relation("SwapRequester", fields: [requesterId], references: [id])
+
+  targetId String
+  target   User @relation("SwapTarget", fields: [targetId], references: [id])
+
+  status SwapStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  respondedAt DateTime?
+
+  @@index([supervisionId])
+  @@index([requesterId])
+  @@index([targetId])
+  @@index([status])
+}
