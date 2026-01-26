@@ -2,7 +2,6 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { revalidateTag } from "next/cache";
 import { addWeeks, addMinutes } from "date-fns";
 
 /**
@@ -86,8 +85,8 @@ export async function createSupervision(formData: {
     // Run all creations in a transaction so they succeed or fail together
     await prisma.$transaction(operations);
 
+    revalidatePath("/dashboard");
     revalidatePath("/admin");
-    revalidateTag("supervisions", "max");
     return { success: true, count: operations.length };
   } catch (error) {
     console.error("Failed to create supervision:", error);
@@ -100,8 +99,8 @@ export async function deleteSupervision(id: string) {
     await prisma.supervision.delete({
       where: { id },
     });
+    revalidatePath("/dashboard");
     revalidatePath("/admin");
-    revalidateTag("supervisions", "max");
     return { success: true };
   } catch (error) {
     return { success: false, error: "Failed to delete" };
@@ -139,8 +138,8 @@ export async function updateSupervision(
       },
     });
 
+    revalidatePath("/dashboard");
     revalidatePath("/admin");
-    revalidateTag("supervisions", "max");
     return { success: true };
   } catch (error) {
     console.error(error);

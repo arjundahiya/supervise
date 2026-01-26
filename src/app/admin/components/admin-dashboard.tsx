@@ -1,12 +1,13 @@
+// src/app/admin/dashboard/page.tsx
 import { auth } from "@/lib/auth"; 
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { 
   Card, 
   CardContent, 
+  CardDescription, 
   CardHeader, 
-  CardTitle,
-  CardDescription
+  CardTitle 
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,63 +15,51 @@ import { CalendarDays, MapPin, Users, Clock, BookOpen, TrendingUp, Filter } from
 import { format } from "date-fns";
 import { CreateSupervisionButton } from "./create-supervision-button"; 
 import { ManageSupervisionDialog } from "./manage-supervision-dialog";
-import { unstable_cache } from "next/cache";
 
-// --- CACHED Data Fetching ---
-// We wrap the query in unstable_cache and give it the "supervisions" tag.
-const getCachedAdminData = unstable_cache(
-  async () => {
-    const supervisions = await prisma.supervision.findMany({
-      include: {
-        students: {
-          select: { 
+// --- Real Data Fetching ---
+async function getAdminData() {
+  const supervisions = await prisma.supervision.findMany({
+    include: {
+      students: {
+        // Change: Fetch details, not just ID, so the Edit form works
+        select: { 
             id: true, 
-            full_name: true,  
+            full_name: true,  // Adjust to your actual DB column name (e.g. name or full_name)
             email_address: true 
-          } 
-        }
-      },
-      orderBy: {
-        startsAt: 'asc'
+        } 
       }
-    });
-    
-    // Perform data mapping INSIDE the cache function 
-    // so we cache the processed result, saving CPU cycles too.
-    return supervisions.map(s => ({
-      ...s,
-      studentCount: s.students.length,
-      // Safe check for description to extract supervisor name
-      supervisorName: s.description && s.description.startsWith('Supervisor:') 
-        ? s.description.split('\n')[0].replace('Supervisor: ', '') 
-        : "Staff Member"
-    }));
-  },
-  ["admin-supervisions-data"], // internal cache key
-  { 
-    tags: ["supervisions"], // <--- 2. THE SHARED TAG
-    revalidate: 3600 // Auto-refresh every hour as a fallback
-  }
-);
+    },
+    orderBy: {
+      startsAt: 'asc'
+    }
+  });
+  
+  // Mapping stays mostly the same
+  return supervisions.map(s => ({
+    ...s,
+    studentCount: s.students.length,
+    supervisorName: s.description?.split('\n')[0].startsWith('Supervisor:') 
+      ? s.description.split('\n')[0].replace('Supervisor: ', '') 
+      : "Staff Member"
+  }));
+}
 
 export default async function AdminDashboard() {
   const session = await auth.api.getSession({ headers: await headers() });
   
-  // Security check
+  // Security check (uncomment when roles are fully set up)
   // if (session?.user.role !== "ADMIN") redirect("/");
 
-  // 3. Use the cached function
-  // This reads from the same cache "pool" as your student dashboard
-  const supervisions = await getCachedAdminData();
-  
+  const supervisions = await getAdminData();
   const now = new Date();
   
   // Logic to split lists
   const upcoming = supervisions.filter(s => s.endsAt >= now);
-  const past = supervisions.filter(s => s.endsAt < now).sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
+  const past = supervisions.filter(s => s.endsAt < now).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
 
   // Stats
   const totalStudents = supervisions.reduce((acc, s) => acc + s.studentCount, 0);
+  // Calculate unique staff based on our "Description hack" or just count total sessions
   const activeStaff = new Set(supervisions.map(s => s.supervisorName)).size;
 
   return (
@@ -130,7 +119,8 @@ export default async function AdminDashboard() {
   );
 }
 
-// ... Rest of your sub-components (StatsCard, AdminSupervisionCard) remain exactly the same ...
+// --- Sub-components ---
+
 function StatsCard({ title, value, icon: Icon, description }: any) {
   return (
     <Card>
@@ -172,7 +162,7 @@ function AdminSupervisionCard({ supervision, isPast }: { supervision: any, isPas
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
              <CalendarDays className="w-4 h-4" />
-             {format(new Date(supervision.startsAt), "EEE, d MMM")} • {format(new Date(supervision.startsAt), "h:mm a")}
+             {format(supervision.startsAt, "EEE, d MMM")} • {format(supervision.startsAt, "h:mm a")}
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
              <Users className="w-4 h-4" />

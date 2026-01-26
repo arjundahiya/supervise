@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth"; // Adjust path to your auth client/server con
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { unstable_cache } from "next/cache";
 import { 
   Card, 
   CardContent, 
@@ -53,24 +52,6 @@ async function getStudentSupervisions(userId: string) {
     },
   });
 }
-
-const getCachedSupervisions = unstable_cache(
-  async (userId: string) => {
-    return await prisma.supervision.findMany({
-      where: { students: { some: { id: userId } } },
-      include: {
-        students: { select: { id: true, full_name: true, image: true, email_address: true } },
-        swapRequests: { where: { requesterId: userId, status: "PENDING" } },
-      },
-      orderBy: { startsAt: "asc" },
-    });
-  },
-  ["student-supervisions"], // Key parts (this part is internal)
-  { 
-    tags: ["supervisions"], // The important part: We will invalidate this tag later
-    revalidate: 3600 // Optional: Auto-revalidate every hour regardless
-  } 
-);
 
 // --- Components ---
 
@@ -191,7 +172,7 @@ export default async function StudentDashboard() {
   }
 
   // 2. Fetch Data
-  const supervisionsData = getCachedSupervisions(session.user.id);
+  const supervisionsData = getStudentSupervisions(session.user.id);
   const availabilityData = getUserAvailability(session.user.id);
   const [supervisions, availability] = await Promise.all([supervisionsData, availabilityData]);
 
@@ -205,7 +186,7 @@ export default async function StudentDashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {session.user.name.split(' ')[0]}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">My Supervisions</h1>
           <p className="text-muted-foreground mt-1">
             View your upcoming schedule and manage supervision swaps.
           </p>
