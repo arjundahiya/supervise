@@ -76,14 +76,6 @@ export async function GET(
         status: "CONFIRMED",
         busyStatus: "BUSY",
         organizer: { name: "Stooge", email: "hjs83@cam.ac.uk" },
-        // Manual dtstamp kept as requested
-        dtstamp: [
-          now.getUTCFullYear(),
-          now.getUTCMonth() + 1,
-          now.getUTCDate(),
-          now.getUTCHours(),
-          now.getUTCMinutes(),
-        ],
       };
     });
 
