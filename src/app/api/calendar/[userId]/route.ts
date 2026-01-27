@@ -34,7 +34,8 @@ export async function GET(
       {
         headers: {
             "Content-Type": "text/calendar; charset=utf-8",
-            "Content-Disposition": `inline; filename="supervisions.ics"`,
+            "Content-Disposition": `attachment; filename="supervisions.ics"`,
+            "Cache-Control": "no-store, max-age=0",
         }
       }
     );
@@ -46,6 +47,7 @@ export async function GET(
     const end = new Date(s.endsAt);
 
     return {
+      uid: `supervision-${s.id}@supervise`,
       start: [
         start.getFullYear(), 
         start.getMonth() + 1, 
