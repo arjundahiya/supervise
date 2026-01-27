@@ -34,7 +34,7 @@ export async function GET(
       {
         headers: {
             "Content-Type": "text/calendar; charset=utf-8",
-            "Content-Disposition": `attachment; filename="supervisions.ics"`,
+            "Content-Disposition": `inline; filename="supervisions.ics"`,
         }
       }
     );
@@ -66,6 +66,13 @@ export async function GET(
       status: "CONFIRMED",
       busyStatus: "BUSY",
       organizer: { name: "Stooge", email: "hjs83@cam.ac.uk" },
+      dtstamp: [
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth() + 1,
+        new Date().getUTCDate(),
+        new Date().getUTCHours(),
+        new Date().getUTCMinutes(),
+      ],
     };
   });
 

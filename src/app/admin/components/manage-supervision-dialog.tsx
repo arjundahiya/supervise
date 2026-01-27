@@ -107,7 +107,7 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="w-full">Manage Details</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-150 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Supervision</DialogTitle>
         </DialogHeader>
@@ -146,7 +146,7 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
                                 <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
                             </PopoverContent>
                         </Popover>
-                        <Input type="time" className="w-[90px]" value={time} onChange={(e) => setTime(e.target.value)} />
+                        <Input type="time" className="w-22.5" value={time} onChange={(e) => setTime(e.target.value)} />
                     </div>
                 </div>
                 <div className="space-y-2 col-span-2 md:col-span-1">
@@ -172,7 +172,7 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
             {/* Students */}
             <div className="space-y-2 border rounded-md p-3">
                 <Label>Enrolled Students ({selectedStudents.length})</Label>
-                <div className="h-[120px] overflow-y-auto space-y-1 mt-2">
+                <div className="h-30 overflow-y-auto space-y-1 mt-2">
                     {isLoadingStudents ? <Loader2 className="animate-spin h-4 w-4" /> : 
                      allStudents.map(student => (
                         <div key={student.id} className="flex items-center space-x-2">
