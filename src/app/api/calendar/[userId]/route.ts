@@ -53,7 +53,7 @@ export async function GET(
       return new NextResponse(emptyCal, {
         headers: {
           "Content-Type": "text/calendar; charset=utf-8",
-          "Content-Disposition": `inline; filename="supervisions.ics"`,
+          "Content-Disposition": `attachment; filename="supervisions.ics"`,
         }
       });
     }
