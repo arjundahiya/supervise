@@ -1,7 +1,7 @@
 // src/app/admin/dashboard/page.tsx
 import { auth } from "@/lib/auth"; 
 import { headers } from "next/headers";
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db"; // Import your Drizzle instance
 import { 
   Card, 
   CardContent, 
@@ -16,50 +16,55 @@ import { format } from "date-fns";
 import { CreateSupervisionButton } from "./create-supervision-button"; 
 import { ManageSupervisionDialog } from "./manage-supervision-dialog";
 
-// --- Real Data Fetching ---
+// --- Real Data Fetching with Drizzle ---
 async function getAdminData() {
-  const supervisions = await prisma.supervision.findMany({
-    include: {
+  const result = await db.query.supervisions.findMany({
+    with: {
       students: {
-        // Change: Fetch details, not just ID, so the Edit form works
-        select: { 
-            id: true, 
-            full_name: true,  // Adjust to your actual DB column name (e.g. name or full_name)
-            email_address: true 
-        } 
+        with: {
+          user: {
+            columns: {
+              id: true,
+              full_name: true,
+              email_address: true,
+            }
+          }
+        }
       }
     },
-    orderBy: {
-      startsAt: 'asc'
-    }
+    orderBy: (supervisions, { asc }) => [asc(supervisions.startsAt)],
   });
   
-  // Mapping stays mostly the same
-  return supervisions.map(s => ({
-    ...s,
-    studentCount: s.students.length,
-    supervisorName: s.description?.split('\n')[0].startsWith('Supervisor:') 
-      ? s.description.split('\n')[0].replace('Supervisor: ', '') 
-      : "Staff Member"
-  }));
+  // Transform the Drizzle "Junction" structure back to a flat array for the UI
+  return result.map(s => {
+    const flattenedStudents = s.students.map(rel => rel.user);
+    
+    return {
+      ...s,
+      students: flattenedStudents, // Keeps compatibility with ManageSupervisionDialog
+      studentCount: flattenedStudents.length,
+      supervisorName: s.description?.split('\n')[0].startsWith('Supervisor:') 
+        ? s.description.split('\n')[0].replace('Supervisor: ', '') 
+        : "Staff Member"
+    };
+  });
 }
 
 export default async function AdminDashboard() {
   const session = await auth.api.getSession({ headers: await headers() });
   
-  // Security check (uncomment when roles are fully set up)
+  // Security check
   // if (session?.user.role !== "ADMIN") redirect("/");
 
   const supervisions = await getAdminData();
   const now = new Date();
   
-  // Logic to split lists
   const upcoming = supervisions.filter(s => s.endsAt >= now);
-  const past = supervisions.filter(s => s.endsAt < now).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
+  const past = supervisions
+    .filter(s => s.endsAt < now)
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
 
-  // Stats
   const totalStudents = supervisions.reduce((acc, s) => acc + s.studentCount, 0);
-  // Calculate unique staff based on our "Description hack" or just count total sessions
   const activeStaff = new Set(supervisions.map(s => s.supervisorName)).size;
 
   return (
@@ -119,7 +124,7 @@ export default async function AdminDashboard() {
   );
 }
 
-// --- Sub-components ---
+// --- Sub-components (Stay exactly the same) ---
 
 function StatsCard({ title, value, icon: Icon, description }: any) {
   return (

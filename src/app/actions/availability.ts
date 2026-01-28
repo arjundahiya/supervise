@@ -1,26 +1,32 @@
 "use server";
 
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { availabilities } from "@/lib/db/schema";
+import { eq, and, gte, lte, asc } from "drizzle-orm";
 import { startOfDay, endOfDay } from "date-fns";
 import { revalidatePath } from "next/cache";
+
+/**
+ * Fetch all availability slots for a specific date
+ */
 export async function getAvailabilityForDate(date: Date) {
   const dayStart = startOfDay(date);
   const dayEnd = endOfDay(date);
 
-  const busySlots = await prisma.availability.findMany({
-    where: {
-      startsAt: {
-        gte: dayStart,
-        lte: dayEnd
-      }
-    },
-    select: {
-      userId: true,
-      type: true, // Fetch type (PERSONAL or GLOBAL)
-      startsAt: true,
-      endsAt: true
-    }
-  });
+  const busySlots = await db
+    .select({
+      userId: availabilities.userId,
+      type: availabilities.type,
+      startsAt: availabilities.startsAt,
+      endsAt: availabilities.endsAt,
+    })
+    .from(availabilities)
+    .where(
+      and(
+        gte(availabilities.startsAt, dayStart),
+        lte(availabilities.startsAt, dayEnd)
+      )
+    );
 
   return busySlots;
 }
@@ -29,17 +35,16 @@ export async function getAvailabilityForDate(date: Date) {
  * Fetch all future availability slots for a specific user
  */
 export async function getUserAvailability(userId: string) {
-  return await prisma.availability.findMany({
-    where: {
-      userId: userId,
-      startsAt: {
-        gte: new Date() // Only show future/current slots
-      }
-    },
-    orderBy: {
-      startsAt: 'asc'
-    }
-  });
+  return await db
+    .select()
+    .from(availabilities)
+    .where(
+      and(
+        eq(availabilities.userId, userId),
+        gte(availabilities.startsAt, new Date())
+      )
+    )
+    .orderBy(asc(availabilities.startsAt));
 }
 
 /**
@@ -47,18 +52,17 @@ export async function getUserAvailability(userId: string) {
  */
 export async function addBusySlot(userId: string, startsAt: Date, endsAt: Date) {
   try {
-    await prisma.availability.create({
-      data: {
-        userId,
-        type: "PERSONAL",
-        startsAt,
-        endsAt
-      }
+    await db.insert(availabilities).values({
+      userId,
+      type: "PERSONAL", // Note: This uses the string value defined in your Enum
+      startsAt,
+      endsAt,
     });
-    revalidatePath("/dashboard"); // Refresh the student page
+
+    revalidatePath("/dashboard");
     return { success: true };
   } catch (error) {
-    console.error(error);
+    console.error("Drizzle Error:", error);
     return { success: false, error: "Failed to add busy slot" };
   }
 }
@@ -68,12 +72,14 @@ export async function addBusySlot(userId: string, startsAt: Date, endsAt: Date) 
  */
 export async function deleteAvailability(slotId: string) {
   try {
-    await prisma.availability.delete({
-      where: { id: slotId }
-    });
+    await db
+      .delete(availabilities)
+      .where(eq(availabilities.id, slotId));
+
     revalidatePath("/dashboard");
     return { success: true };
   } catch (error) {
+    console.error("Drizzle Error:", error);
     return { success: false, error: "Failed to delete slot" };
   }
 }

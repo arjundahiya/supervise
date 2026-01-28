@@ -1,6 +1,8 @@
-import { auth } from "@/lib/auth"; // Adjust path to your auth client/server config
+import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { supervisions, usersToSupervisions, swapRequests } from "@/lib/db/schema";
+import { eq, and, exists } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { 
   Card, 
@@ -20,43 +22,57 @@ import { AvailabilityManager } from "./availability-manager";
 import { CalendarSyncButton } from "./calendar-sync-button";
 
 // --- Types ---
-// We define a type that matches the Prisma output with relations
+// Drizzle types are slightly different; we infer from the transformation function
 type SupervisionWithStudents = Awaited<ReturnType<typeof getStudentSupervisions>>[number];
 
 // --- Data Fetching ---
 async function getStudentSupervisions(userId: string) {
-  return await prisma.supervision.findMany({
-    where: {
+  const result = await db.query.supervisions.findMany({
+    where: (supervisions, { exists }) => 
+      exists(
+        db.select()
+          .from(usersToSupervisions)
+          .where(
+            and(
+              eq(usersToSupervisions.supervisionId, supervisions.id),
+              eq(usersToSupervisions.userId, userId)
+            )
+          )
+      ),
+    with: {
       students: {
-        some: {
-          id: userId,
-        },
+        with: {
+          user: {
+            columns: {
+              id: true,
+              full_name: true,
+              image: true,
+              email_address: true,
+            }
+          }
+        }
       },
-    },
-    include: {
-      students: {
-        select: {
-          id: true,
-          full_name: true,
-          image: true,
-          email_address: true,
-        },
-      },
-      // Optional: Check if there is already a pending swap for UI state
       swapRequests: {
-        where: { requesterId: userId, status: "PENDING" },
-      },
+        where: (swaps, { and, eq }) => 
+          and(eq(swaps.requesterId, userId), eq(swaps.status, "PENDING"))
+      }
     },
-    orderBy: {
-      startsAt: "asc",
-    },
+    orderBy: (supervisions, { asc }) => [asc(supervisions.startsAt)],
   });
+
+  // Flatten the nested Drizzle structure to match your existing Component props
+  return result.map(s => ({
+    ...s,
+    students: s.students.map(rel => rel.user),
+    swapRequests: s.swapRequests
+  }));
 }
 
 // --- Components ---
 
 /**
  * A helper component to render a single supervision card
+ * (Code remains identical to your Prisma version as the data shape is mapped above)
  */
 function SupervisionCard({ 
   supervision, 
@@ -66,8 +82,6 @@ function SupervisionCard({
   currentUserId: string 
 }) {
   const isPast = new Date(supervision.endsAt) < new Date();
-  
-  // Filter out the current user from the list to show "others"
   const otherStudents = supervision.students.filter(s => s.id !== currentUserId);
 
   return (
@@ -94,7 +108,6 @@ function SupervisionCard({
       
       <CardContent className="flex-1 pb-3">
         <div className="grid gap-4">
-          {/* Time Details */}
           <div className="flex items-center gap-3 text-sm border-l-2 border-primary/20 pl-3">
             <div className="grid gap-0.5">
               <div className="flex items-center gap-2 font-medium text-foreground">
@@ -108,14 +121,12 @@ function SupervisionCard({
             </div>
           </div>
 
-          {/* Description (if exists) */}
           {supervision.description && (
             <p className="text-sm text-muted-foreground line-clamp-2">
               {supervision.description}
             </p>
           )}
 
-          {/* Peers Section */}
           <div>
             <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <Users className="w-3 h-3" />
@@ -148,7 +159,6 @@ function SupervisionCard({
       </CardContent>
 
       <CardFooter className="pt-3 border-t bg-muted/20">
-        {/* Placeholder for Swap Action */}
         {!isPast && (
           <Button variant="outline" size="sm" className="w-full gap-2 group">
              <ArrowRightLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -162,7 +172,6 @@ function SupervisionCard({
 
 // --- Main Page Component ---
 export default async function StudentDashboard() {
-  // 1. Authenticate User
   const session = await auth.api.getSession({
     headers: await headers()
   });
@@ -171,19 +180,17 @@ export default async function StudentDashboard() {
     redirect("/");
   }
 
-  // 2. Fetch Data
-  const supervisionsData = getStudentSupervisions(session.user.id);
-  const availabilityData = getUserAvailability(session.user.id);
-  const [supervisions, availability] = await Promise.all([supervisionsData, availabilityData]);
+  const [supervisions, availability] = await Promise.all([
+    getStudentSupervisions(session.user.id),
+    getUserAvailability(session.user.id)
+  ]);
 
-  // 3. Separate Upcoming and Past for better UX
   const now = new Date();
   const upcoming = supervisions.filter(s => s.endsAt >= now);
   const past = supervisions.filter(s => s.endsAt < now);
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Supervisions</h1>
@@ -193,14 +200,13 @@ export default async function StudentDashboard() {
         </div>
         <div className="flex gap-2">
           <CalendarSyncButton userId={session.user.id} />
-            <AvailabilityManager 
-                userId={session.user.id} 
-                initialData={availability} 
-            />
+          <AvailabilityManager 
+              userId={session.user.id} 
+              initialData={availability} 
+          />
         </div>
       </div>
 
-      {/* Upcoming Section */}
       <section className="space-y-4">
         <h2 className="text-xl font-semibold flex items-center gap-2">
           Upcoming Sessions
@@ -225,7 +231,6 @@ export default async function StudentDashboard() {
         )}
       </section>
 
-      {/* Past Section (Collapsible or just listed below) */}
       {past.length > 0 && (
         <section className="space-y-4 pt-8 border-t">
           <h2 className="text-xl font-semibold text-muted-foreground">Past Sessions</h2>

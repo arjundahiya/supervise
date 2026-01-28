@@ -1,39 +1,34 @@
 "use server";
 
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db"; // Your Drizzle + Neon client
+import { users, supervisions, usersToSupervisions } from "@/lib/db/schema";
+import { eq, inArray, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { addWeeks, addMinutes } from "date-fns";
 
 /**
- * Fetch all assignable users (Students AND Admins)
+ * Fetch all assignable users
  */
 export async function getStudentsForSelection() {
-  const users = await prisma.users.findMany({
-    where: {
-      role: {
-        in: ["STUDENT", "ADMIN"] // Fetch both roles
-      },
-    },
-    select: {
-      id: true,
-      full_name: true,  // Adjust if your column is 'full_name'
-      email_address: true, // Adjust if your column is 'email_address'
-    },
-    orderBy: {
-      full_name: "asc",
-    },
-  });
-  
-  // Normalize data shape for the frontend
-  return users.map(u => ({
+  const result = await db
+    .select({
+      id: users.id,
+      full_name: users.full_name,
+      email_address: users.email_address,
+    })
+    .from(users)
+    .where(inArray(users.role, ["STUDENT", "ADMIN"]))
+    .orderBy(asc(users.full_name));
+
+  return result.map((u) => ({
     id: u.id,
-    full_name: u.full_name || "Unknown Name", 
-    email_address: u.email_address
+    full_name: u.full_name || "Unknown Name",
+    email_address: u.email_address,
   }));
 }
 
 /**
- * Create a new supervision
+ * Create a new supervision (with recursion/repeats)
  */
 export async function createSupervision(formData: {
   title: string;
@@ -41,64 +36,67 @@ export async function createSupervision(formData: {
   location: string;
   description: string;
   startsAt: Date;
-  durationMinutes: number; // New field
-  repeatUntil?: Date;      // New optional field
+  durationMinutes: number;
+  repeatUntil?: Date;
   studentIds: string[];
 }) {
   try {
     const fullDescription = `Supervisor: ${formData.supervisorName}\n\n${formData.description}`;
-    
-    // We will collect all the "create" promises here
-    const operations = [];
-
     let currentStart = formData.startsAt;
-    // If no repeat date is set, we treat it as the same as the start date (run once)
     const endLimit = formData.repeatUntil || formData.startsAt;
+    
+    // Using a transaction to ensure all weeks and relations are created together
+    await db.transaction(async (tx) => {
+      let count = 0;
 
-    // Loop: Keep adding weeks while the current start date is before or on the limit
-    while (currentStart <= endLimit) {
-      
-      const currentEnd = addMinutes(currentStart, formData.durationMinutes);
+      while (currentStart <= endLimit && count < 52) {
+        const currentEnd = addMinutes(currentStart, formData.durationMinutes);
 
-      operations.push(
-        prisma.supervision.create({
-          data: {
+        // 1. Insert the supervision session
+        const [newSupervision] = await tx
+          .insert(supervisions)
+          .values({
             title: formData.title,
             location: formData.location,
             description: fullDescription,
             startsAt: currentStart,
             endsAt: currentEnd,
-            students: {
-              connect: formData.studentIds.map((id) => ({ id })),
-            },
-          },
-        })
-      );
+          })
+          .returning({ id: supervisions.id });
 
-      // Prepare for next iteration
-      currentStart = addWeeks(currentStart, 1);
-      
-      // Safety break: Just in case someone sets a date 100 years in the future
-      if (operations.length > 52) break; 
-    }
+        // 2. Insert the many-to-many relations (Junction Table)
+        if (formData.studentIds.length > 0) {
+          await tx.insert(usersToSupervisions).values(
+            formData.studentIds.map((userId) => ({
+              supervisionId: newSupervision.id,
+              userId: userId,
+            }))
+          );
+        }
 
-    // Run all creations in a transaction so they succeed or fail together
-    await prisma.$transaction(operations);
+        currentStart = addWeeks(currentStart, 1);
+        count++;
+      }
+    });
 
     revalidatePath("/dashboard");
     revalidatePath("/admin");
-    return { success: true, count: operations.length };
+    return { success: true };
   } catch (error) {
     console.error("Failed to create supervision:", error);
-    return { success: false, error: "Failed to create supervision" };
+    return { success: false, error: "Failed to create" };
   }
 }
 
+/**
+ * Delete supervision
+ */
 export async function deleteSupervision(id: string) {
   try {
-    await prisma.supervision.delete({
-      where: { id },
-    });
+    // Note: If you have "ON DELETE CASCADE" in your DB schema for the 
+    // junction table, deleting the supervision will auto-delete relations.
+    await db.delete(supervisions).where(eq(supervisions.id, id));
+    
     revalidatePath("/dashboard");
     revalidatePath("/admin");
     return { success: true };
@@ -107,8 +105,11 @@ export async function deleteSupervision(id: string) {
   }
 }
 
+/**
+ * Update supervision
+ */
 export async function updateSupervision(
-  id: string, 
+  id: string,
   data: {
     title: string;
     supervisorName: string;
@@ -123,19 +124,32 @@ export async function updateSupervision(
     const fullDescription = `Supervisor: ${data.supervisorName}\n\n${data.description}`;
     const endsAt = addMinutes(data.startsAt, data.durationMinutes);
 
-    await prisma.supervision.update({
-      where: { id },
-      data: {
-        title: data.title,
-        location: data.location,
-        description: fullDescription,
-        startsAt: data.startsAt,
-        endsAt: endsAt,
-        students: {
-          set: [], // Disconnect everyone first (easiest way to sync)
-          connect: data.studentIds.map((sid) => ({ id: sid })),
-        },
-      },
+    await db.transaction(async (tx) => {
+      // 1. Update the main record
+      await tx
+        .update(supervisions)
+        .set({
+          title: data.title,
+          location: data.location,
+          description: fullDescription,
+          startsAt: data.startsAt,
+          endsAt: endsAt,
+        })
+        .where(eq(supervisions.id, id));
+
+      // 2. Sync Many-to-Many: Delete old relations and insert new ones
+      await tx
+        .delete(usersToSupervisions)
+        .where(eq(usersToSupervisions.supervisionId, id));
+
+      if (data.studentIds.length > 0) {
+        await tx.insert(usersToSupervisions).values(
+          data.studentIds.map((sid) => ({
+            supervisionId: id,
+            userId: sid,
+          }))
+        );
+      }
     });
 
     revalidatePath("/dashboard");

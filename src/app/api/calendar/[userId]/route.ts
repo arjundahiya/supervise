@@ -1,13 +1,11 @@
-import prisma from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { supervisions, usersToSupervisions } from "@/lib/db/schema";
+import { eq, and, gte, exists } from "drizzle-orm";
 import { createEvents, EventAttributes } from "ics";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Promisified wrapper for the 'ics' library to prevent 
- * Next.js route handlers from hanging.
- */
 const generateIcs = (events: EventAttributes[]): Promise<string> => {
   return new Promise((resolve, reject) => {
     createEvents(events, (error, value) => {
@@ -24,21 +22,33 @@ export async function GET(
   try {
     const { userId } = await params;
 
-    // 1. Fetch Supervisions
-    const supervisions = await prisma.supervision.findMany({
-      where: {
-        students: { some: { id: userId } },
-        startsAt: {
-          gte: new Date(new Date().setMonth(new Date().getMonth() - 1)) 
-        }
-      },
-      include: {
-        students: { select: { full_name: true } }
-      }
-    });
+    // 1. Fetch Supervisions where the student is present
+    // Logic: find supervisions where a row exists in usersToSupervisions for this user
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+    const userSupervisions = await db
+      .select()
+      .from(supervisions)
+      .where(
+        and(
+          gte(supervisions.startsAt, oneMonthAgo),
+          exists(
+            db
+              .select()
+              .from(usersToSupervisions)
+              .where(
+                and(
+                  eq(usersToSupervisions.supervisionId, supervisions.id),
+                  eq(usersToSupervisions.userId, userId)
+                )
+              )
+          )
+        )
+      );
 
     // 2. Handle empty calendar case
-    if (!supervisions || supervisions.length === 0) {
+    if (!userSupervisions || userSupervisions.length === 0) {
       const emptyCal = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//My App//EN\nEND:VCALENDAR";
       return new NextResponse(emptyCal, {
         headers: {
@@ -49,10 +59,9 @@ export async function GET(
     }
 
     // 3. Format for ICS
-    const events: EventAttributes[] = supervisions.map((s) => {
+    const events: EventAttributes[] = userSupervisions.map((s) => {
       const start = new Date(s.startsAt);
       const end = new Date(s.endsAt);
-      const now = new Date();
 
       return {
         uid: `supervision-${s.id}@supervise`,
@@ -79,7 +88,7 @@ export async function GET(
       };
     });
 
-    // 4. Generate content using the promisified helper
+    // 4. Generate content
     const calendarContent = await generateIcs(events);
 
     return new NextResponse(calendarContent, {
