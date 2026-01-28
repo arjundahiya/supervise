@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
@@ -14,12 +15,14 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, LayoutDashboard, ShieldCheck, HelpCircle, Bell, Search } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { LogOut, LayoutDashboard, ShieldCheck, Bell, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Navbar() {
     const router = useRouter();
     const pathname = usePathname();
+    const [open, setOpen] = useState(false);
     
     const { data: session } = authClient.useSession();
     const isAdmin = (session?.user as any)?.role === "ADMIN";
@@ -35,14 +38,53 @@ export default function Navbar() {
         });
     };
 
-    // Helper for active link styling
-    const isActive = (path: string) => pathname === path;
+    const navLinks = [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
+    ];
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
             <div className="mx-auto max-w-7xl px-4 h-16 flex items-center justify-between">
                 
-                {/* Left: Brand & Nav */}
+                {/* Mobile Menu Button */}
+                <div className="flex md:hidden">
+                    <Sheet open={open} onOpenChange={setOpen}>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon" className="mr-2">
+                                <Menu className="w-5 h-5" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-70 sm:w-87.5">
+                            <SheetHeader className="text-left">
+                                <SheetTitle className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">S</div>
+                                    Supervise
+                                </SheetTitle>
+                            </SheetHeader>
+                            <nav className="flex flex-col gap-2 mt-8">
+                                {navLinks.map((link) => (
+                                    <Link
+                                        key={link.href}
+                                        href={link.href}
+                                        onClick={() => setOpen(false)}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                                            pathname === link.href 
+                                                ? "bg-primary text-primary-foreground" 
+                                                : "text-muted-foreground hover:bg-muted"
+                                        )}
+                                    >
+                                        <link.icon className="w-5 h-5" />
+                                        {link.label}
+                                    </Link>
+                                ))}
+                            </nav>
+                        </SheetContent>
+                    </Sheet>
+                </div>
+
+                {/* Brand Logo */}
                 <div className="flex items-center gap-8">
                     <Link href="/dashboard" className="flex items-center gap-2 group">
                         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold group-hover:rotate-3 transition-transform">
@@ -53,34 +95,31 @@ export default function Navbar() {
                         </span>
                     </Link>
 
+                    {/* Desktop Navigation */}
                     <nav className="hidden md:flex items-center gap-1">
-                        <NavLink href="/dashboard" active={isActive("/dashboard")}>
-                            <LayoutDashboard className="w-4 h-4" />
-                            Dashboard
-                        </NavLink>
-                        {isAdmin && (
-                            <NavLink href="/admin" active={isActive("/admin")}>
-                                <ShieldCheck className="w-4 h-4" />
-                                Admin
-                            </NavLink>
-                        )}
+                        {navLinks.map((link) => (
+                            <Link 
+                                key={link.href}
+                                href={link.href} 
+                                className={cn(
+                                    "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                                    pathname === link.href 
+                                        ? "bg-primary/10 text-primary" 
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                )}
+                            >
+                                <link.icon className="w-4 h-4" />
+                                {link.label}
+                            </Link>
+                        ))}
                     </nav>
                 </div>
 
-                {/* Right: Actions & Profile */}
-                <div className="flex items-center gap-2 sm:gap-4">
-                    {/* Visual Search Trigger (for future Cmd+K) */}
-                    <button className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground border rounded-md bg-muted/50 hover:bg-muted transition-colors">
-                        <Search className="w-4 h-4" />
-                        <span>Search...</span>
-                        <kbd className="ml-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-background px-1.5 font-mono text-[10px] font-medium opacity-100">
-                            <span className="text-xs">⌘</span>K
-                        </kbd>
-                    </button>
-
+                {/* Right Side Icons */}
+                <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" className="text-muted-foreground relative">
                         <Bell className="w-5 h-5" />
-                        <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-background" />
+                        <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-background" />
                     </Button>
 
                     {session ? (
@@ -96,19 +135,14 @@ export default function Navbar() {
                             <DropdownMenuContent align="end" className="w-56">
                                 <DropdownMenuLabel className="font-normal">
                                     <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none">{session.user.name}</p>
-                                        <p className="text-xs leading-none text-muted-foreground italic">
+                                        <p className="text-sm font-medium">{session.user.name}</p>
+                                        <p className="text-xs text-muted-foreground italic">
                                             {isAdmin ? "Administrator" : "Student"}
                                         </p>
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuGroup>
-                                    <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-                                    <DropdownMenuItem>Notification Preferences</DropdownMenuItem>
-                                </DropdownMenuGroup>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 focus:bg-red-50">
+                                <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
                                     <LogOut className="mr-2 h-4 w-4" />
                                     <span>Sign Out</span>
                                 </DropdownMenuItem>
@@ -122,22 +156,5 @@ export default function Navbar() {
                 </div>
             </div>
         </header>
-    );
-}
-
-// Sub-component for cleaner code
-function NavLink({ href, children, active }: { href: string; children: React.ReactNode; active: boolean }) {
-    return (
-        <Link 
-            href={href} 
-            className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                active 
-                    ? "bg-primary/10 text-primary" 
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-        >
-            {children}
-        </Link>
     );
 }
