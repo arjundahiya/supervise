@@ -1,29 +1,24 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
-import { supervisions, usersToSupervisions, swapRequests } from "@/lib/db/schema";
-import { eq, and, exists } from "drizzle-orm";
+import { supervisions, usersToSupervisions } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
-} from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, MapPin, Users, Clock, ArrowRightLeft } from "lucide-react";
-import { format } from "date-fns";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  MapPin, 
+  Users, 
+  Clock, 
+  ArrowRightLeft, 
+  Calendar as CalendarIcon,
+  ChevronRight 
+} from "lucide-react";
+import { format, isSameDay, startOfDay } from "date-fns";
 import { getUserAvailability } from "@/app/actions/availability";
 import { AvailabilityManager } from "./availability-manager";
 import { CalendarSyncButton } from "./calendar-sync-button";
-
-// --- Types ---
-// Drizzle types are slightly different; we infer from the transformation function
-type SupervisionWithStudents = Awaited<ReturnType<typeof getStudentSupervisions>>[number];
 
 // --- Data Fetching ---
 async function getStudentSupervisions(userId: string) {
@@ -40,145 +35,76 @@ async function getStudentSupervisions(userId: string) {
           )
       ),
     with: {
-      students: {
-        with: {
-          user: {
-            columns: {
-              id: true,
-              full_name: true,
-              image: true,
-              email_address: true,
-            }
-          }
-        }
-      },
-      swapRequests: {
-        where: (swaps, { and, eq }) => 
-          and(eq(swaps.requesterId, userId), eq(swaps.status, "PENDING"))
-      }
+      students: { with: { user: true } },
     },
     orderBy: (supervisions, { asc }) => [asc(supervisions.startsAt)],
   });
 
-  // Flatten the nested Drizzle structure to match your existing Component props
   return result.map(s => ({
     ...s,
     students: s.students.map(rel => rel.user),
-    swapRequests: s.swapRequests
   }));
 }
 
 // --- Components ---
 
-/**
- * A helper component to render a single supervision card
- * (Code remains identical to your Prisma version as the data shape is mapped above)
- */
-function SupervisionCard({ 
-  supervision, 
-  currentUserId 
-}: { 
-  supervision: SupervisionWithStudents, 
-  currentUserId: string 
-}) {
-  const isPast = new Date(supervision.endsAt) < new Date();
-  const otherStudents = supervision.students.filter(s => s.id !== currentUserId);
+function SupervisionRow({ supervision, currentUserId }: { supervision: any, currentUserId: string }) {
+  const otherStudents = supervision.students.filter((s: any) => s.id !== currentUserId);
 
   return (
-    <Card className={`flex flex-col h-full ${isPast ? "opacity-60 bg-muted/50" : ""}`}>
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start gap-2">
-          <div className="space-y-1">
-            <CardTitle className="text-xl font-semibold leading-tight">
-              {supervision.title}
-            </CardTitle>
-            <CardDescription className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> {supervision.location}
-            </CardDescription>
-          </div>
-          {isPast ? (
-            <Badge variant="secondary">Completed</Badge>
-          ) : (
-            <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">
-              Upcoming
-            </Badge>
-          )}
+    <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-card border rounded-xl hover:shadow-md transition-all gap-4">
+      <div className="flex items-start gap-4">
+        {/* Time Column */}
+        <div className="flex flex-col items-center justify-center min-w-[80px] py-2 bg-muted/50 rounded-lg text-secondary-foreground">
+          <span className="text-sm font-bold">{format(supervision.startsAt, "h:mm")}</span>
+          <span className="text-[10px] uppercase opacity-60">{format(supervision.startsAt, "a")}</span>
         </div>
-      </CardHeader>
-      
-      <CardContent className="flex-1 pb-3">
-        <div className="grid gap-4">
-          <div className="flex items-center gap-3 text-sm border-l-2 border-primary/20 pl-3">
-            <div className="grid gap-0.5">
-              <div className="flex items-center gap-2 font-medium text-foreground">
-                <CalendarDays className="w-4 h-4 text-muted-foreground" />
-                {format(supervision.startsAt, "EEEE, d MMMM")}
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="w-4 h-4" />
-                {format(supervision.startsAt, "h:mm a")} - {format(supervision.endsAt, "h:mm a")}
-              </div>
-            </div>
-          </div>
 
-          {supervision.description && (
-            <p className="text-sm text-muted-foreground line-clamp-2">
-              {supervision.description}
-            </p>
-          )}
-
-          <div>
-            <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <Users className="w-3 h-3" />
-              <span>Supervision Partners</span>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              {otherStudents.length > 0 ? (
-                otherStudents.map((student) => (
-                  <div key={student.id} className="flex items-center gap-2 bg-secondary/50 rounded-full pr-3 pl-1 py-1">
-                    <Avatar className="w-6 h-6">
-                      <AvatarImage src={student.image || ""} />
-                      <AvatarFallback className="text-[10px]">
-                        {student.full_name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-xs font-medium truncate max-w-[100px]">
-                      {student.full_name}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <span className="text-xs text-muted-foreground italic">
-                  Private supervision (1-on-1)
-                </span>
-              )}
-            </div>
+        {/* Info Column */}
+        <div className="space-y-1">
+          <h3 className="font-semibold leading-none group-hover:text-primary transition-colors">
+            {supervision.title}
+          </h3>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {format(supervision.startsAt, "h:mm a")} - {format(supervision.endsAt, "h:mm a")}
+            </span>
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3 h-3" />
+              {supervision.location}
+            </span>
           </div>
         </div>
-      </CardContent>
+      </div>
 
-      <CardFooter className="pt-3 border-t bg-muted/20">
-        {!isPast && (
-          <Button variant="outline" size="sm" className="w-full gap-2 group">
-             <ArrowRightLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-             Request Swap
-          </Button>
-        )}
-      </CardFooter>
-    </Card>
+      <div className="flex items-center justify-between sm:justify-end gap-6">
+        {/* Partners */}
+        <div className="flex -space-x-2">
+          {otherStudents.map((student: any) => (
+            <Avatar key={student.id} className="w-7 h-7 border-2 border-background">
+              <AvatarImage src={student.image || ""} />
+              <AvatarFallback className="text-[10px]">{student.full_name[0]}</AvatarFallback>
+            </Avatar>
+          ))}
+          {otherStudents.length === 0 && (
+            <span className="text-[10px] text-muted-foreground italic px-2">1-on-1</span>
+          )}
+        </div>
+
+        {/* Action */}
+        <Button variant="ghost" size="sm" className="h-8 px-2 gap-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+          <ArrowRightLeft className="w-3.5 h-3.5" />
+          Swap
+        </Button>
+      </div>
+    </div>
   );
 }
 
-// --- Main Page Component ---
 export default async function StudentDashboard() {
-  const session = await auth.api.getSession({
-    headers: await headers()
-  });
-
-  if (!session) {
-    redirect("/");
-  }
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/");
 
   const [supervisions, availability] = await Promise.all([
     getStudentSupervisions(session.user.id),
@@ -187,64 +113,56 @@ export default async function StudentDashboard() {
 
   const now = new Date();
   const upcoming = supervisions.filter(s => s.endsAt >= now);
-  const past = supervisions.filter(s => s.endsAt < now);
+
+  // Grouping logic: Create an object where keys are date strings
+  const groupedSupervisions = upcoming.reduce((acc: any, supervision) => {
+    const dateKey = startOfDay(supervision.startsAt).toISOString();
+    if (!acc[dateKey]) acc[dateKey] = [];
+    acc[dateKey].push(supervision);
+    return acc;
+  }, {});
+
+  const sortedDates = Object.keys(groupedSupervisions).sort();
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Supervisions</h1>
-          <p className="text-muted-foreground mt-1">
-            View your upcoming schedule and manage supervision swaps.
-          </p>
+    <div className="container mx-auto py-10 px-4 max-w-4xl space-y-10">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-1">
+          <Badge className="mb-2" variant="outline">Student Portal</Badge>
+          <h1 className="text-4xl font-extrabold tracking-tight">Your Schedule</h1>
+          <p className="text-muted-foreground">Manage your sessions and swap requests.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <CalendarSyncButton userId={session.user.id} />
-          <AvailabilityManager 
-              userId={session.user.id} 
-              initialData={availability} 
-          />
+          <AvailabilityManager userId={session.user.id} initialData={availability} />
         </div>
-      </div>
+      </header>
 
-      <section className="space-y-4">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          Upcoming Sessions
-          <Badge variant="outline" className="ml-2">{upcoming.length}</Badge>
-        </h2>
-        
-        {upcoming.length === 0 ? (
-          <div className="p-12 text-center border rounded-lg bg-muted/10 border-dashed">
-            <h3 className="text-lg font-medium">No upcoming supervisions</h3>
-            <p className="text-muted-foreground">You are all caught up!</p>
+      <div className="space-y-8">
+        {sortedDates.length === 0 ? (
+          <div className="text-center py-20 border-2 border-dashed rounded-3xl">
+             <CalendarIcon className="mx-auto w-10 h-10 text-muted-foreground/40 mb-4" />
+             <p className="text-muted-foreground">No sessions found for the current term.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {upcoming.map((supervision) => (
-              <SupervisionCard 
-                key={supervision.id} 
-                supervision={supervision} 
-                currentUserId={session.user.id} 
-              />
-            ))}
-          </div>
+          sortedDates.map((dateStr) => (
+            <div key={dateStr} className="space-y-3">
+              <h2 className="text-sm font-bold text-muted-foreground flex items-center gap-2 px-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                {format(new Date(dateStr), "EEEE, d MMMM")}
+                {isSameDay(new Date(dateStr), now) && (
+                  <Badge variant="secondary" className="text-[10px] h-4">Today</Badge>
+                )}
+              </h2>
+              <div className="grid gap-2">
+                {groupedSupervisions[dateStr].map((s: any) => (
+                  <SupervisionRow key={s.id} supervision={s} currentUserId={session.user.id} />
+                ))}
+              </div>
+            </div>
+          ))
         )}
-      </section>
-
-      {past.length > 0 && (
-        <section className="space-y-4 pt-8 border-t">
-          <h2 className="text-xl font-semibold text-muted-foreground">Past Sessions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-80">
-            {past.map((supervision) => (
-              <SupervisionCard 
-                key={supervision.id} 
-                supervision={supervision} 
-                currentUserId={session.user.id} 
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      </div>
     </div>
   );
 }
