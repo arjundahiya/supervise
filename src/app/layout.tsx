@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, IBM_Plex_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import Navbar from "./components/navbar";
@@ -9,10 +9,9 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const IBMSans = IBM_Plex_Sans({
   subsets: ["latin"],
-});
+})
 
 export const metadata: Metadata = {
   title: "Supervise",
@@ -25,12 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${IBMSans.className} antialiased dark`}
       >
         <Navbar />
-        {children}
+          {children}
         <Toaster />
       </body>
     </html>
