@@ -1,46 +1,60 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
-import { redirect, RedirectType } from 'next/navigation'
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { Loader2, ShieldCheck, LogIn } from "lucide-react"; // Optional: lucide-react for icons
+
 export default function Home() {
+  const router = useRouter();
+  const { data: session, isPending } = authClient.useSession();
 
-  const { 
-        data: session, 
-        isPending, //loading state
-        error, //error object
-        refetch //refetch the session
-    } = authClient.useSession() 
-
-
-    if (session){
-      return (
-        redirect("/dashboard", RedirectType.replace)
-      )
+  // Using useEffect for redirection is often cleaner to avoid 
+  // "render while redirecting" conflicts in some Next.js versions
+  useEffect(() => {
+    if (session && !isPending) {
+      router.replace("/dashboard");
     }
+  }, [session, isPending, router]);
+
+  if (isPending) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center bg-white dark:bg-zinc-950">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <h1 className="text-4xl font-bold">Supervise</h1>
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            You are logged out.
+    <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
+      <div className="w-full max-w-md space-y-8 rounded-2xl border border-zinc-200 bg-white p-10 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        
+        {/* Logo/Brand Section */}
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-black text-white dark:bg-zinc-100 dark:text-black">
+            <ShieldCheck size={28} />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Supervise
           </h1>
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            Please log in.
-          </h1>
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+            Please sign in to access your dashboard
+          </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-39.5"
+
+        <div className="space-y-4">
+          <button
             onClick={() => authClient.signIn.oauth2({
               providerId: "raven",
-              scopes: ["openid", "email", "profile"]
+              scopes: ["openid", "email", "profile"],
             })}
+            className="flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-zinc-900 px-4 text-sm font-medium text-zinc-50 transition-all hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
           >
-            Sign in
-          </a>
+            <LogIn size={18} />
+            Sign in with Raven
+          </button>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

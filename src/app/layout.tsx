@@ -29,7 +29,9 @@ export default function RootLayout({
         className={`${IBMSans.className} antialiased dark`}
       >
         <Navbar />
+        <main className="flex-1 flex flex-col">
           {children}
+        </main>
         <Toaster />
       </body>
     </html>
