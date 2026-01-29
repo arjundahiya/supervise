@@ -19,7 +19,7 @@ export default function Home() {
 
   if (isPending) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center bg-white dark:bg-zinc-950">
+      <div className="flex flex-1 flex-col items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
       </div>
     );
