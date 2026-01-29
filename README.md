@@ -157,13 +157,13 @@ RAVEN_OAUTH2_URL="https://your-raven-oauth-url/.well-known/openid-configuration"
 3. **Set up the database**
    ```bash
    # Generate migration files
-   pnpm db:generate
+   pnpm drizzle-kit generate
    
    # Apply migrations to database
-   pnpm db:migrate
+   pnpm drizzle-kit migrate
    
    # (Optional) Open Drizzle Studio to inspect database
-   pnpm db:studio
+   pnpm drizzle-kit studio
    ```
 
 4. **Run the development server**
@@ -227,10 +227,10 @@ pnpm build            # Build for production
 pnpm start            # Start production server
 
 # Database
-pnpm db:generate      # Generate Drizzle migrations
-pnpm db:migrate       # Apply migrations
-pnpm db:studio        # Open Drizzle Studio
-pnpm db:push          # Push schema changes (dev only)
+pnpm drizzle-kit generate      # Generate Drizzle migrations
+pnpm drizzle-kit migrate       # Apply migrations
+pnpm drizzle-kit studio        # Open Drizzle Studio
+pnpm drizzle-kit push          # Push schema changes (dev only)
 
 # Linting
 pnpm lint             # Run ESLint
@@ -338,8 +338,8 @@ All UI components are in `src/components/ui/` and follow Radix UI patterns:
 
 2. Generate and apply migration:
    ```bash
-   pnpm db:generate
-   pnpm db:migrate
+   pnpm drizzle-kit generate
+   pnpm drizzle-kit migrate
    ```
 
 3. Update role checks in components and middleware
