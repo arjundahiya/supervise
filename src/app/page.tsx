@@ -26,18 +26,18 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
-      <div className="w-full max-w-md space-y-8 rounded-2xl border border-zinc-200 bg-white p-10 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex flex-1 flex-col items-center justify-center">
+      <div className="w-full max-w-md space-y-8 rounded-2xl border p-10 shadow-sm m-5">
         
         {/* Logo/Brand Section */}
         <div className="flex flex-col items-center text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-black text-white dark:bg-zinc-100 dark:text-black">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl">
             <ShieldCheck size={28} />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-2xl font-bold tracking-tight">
             Supervise
           </h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 text-sm">
             Please sign in to access your dashboard
           </p>
         </div>
@@ -48,7 +48,7 @@ export default function Home() {
               providerId: "raven",
               scopes: ["openid", "email", "profile"],
             })}
-            className="flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-zinc-900 px-4 text-sm font-medium text-zinc-50 transition-all hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="flex h-12 w-full items-center justify-center gap-3 rounded-lg px-4 text-sm font-medium transition-all active:scale-[0.98] hover:backdrop-invert-10 border-2"
           >
             <LogIn size={18} />
             Sign in with Raven
