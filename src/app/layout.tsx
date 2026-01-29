@@ -3,6 +3,7 @@ import { Geist, IBM_Plex_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import Navbar from "./components/navbar";
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default function RootLayout({
           {children}
         </main>
         <Toaster />
+        <SpeedInsights />
       </body>
     </html>
   );
