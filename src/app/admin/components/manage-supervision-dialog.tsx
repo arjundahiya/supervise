@@ -176,8 +176,8 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
             </div>
 
             {/* Date/Time */}
-            <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-2 col-span-2 md:col-span-1">
+            <div className="grid grid-cols-4 gap-4">
+                 <div className="space-y-2 col-span-4 md:col-span-3">
                     <Label>Date & Time</Label>
                     <div className="flex gap-2">
                         <Popover>
@@ -191,7 +191,7 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
                                 <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
                             </PopoverContent>
                         </Popover>
-                        <Input type="time" className="w-22.5" value={time} onChange={(e) => setTime(e.target.value)} />
+                        <Input type="time" className="w-30" value={time} onChange={(e) => setTime(e.target.value)} />
                     </div>
                 </div>
                 <div className="space-y-2 col-span-2 md:col-span-1">
