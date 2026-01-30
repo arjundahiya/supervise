@@ -18,13 +18,17 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { LogOut, LayoutDashboard, ShieldCheck, Bell, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NotificationsPopover } from "./notifications-popover";
 
-export default function Navbar() {
+interface NavbarProps {
+    session: any;
+    swapRequests: any[];
+}
+
+export default function Navbar({ session, swapRequests }: NavbarProps) {
     const router = useRouter();
     const pathname = usePathname();
     const [open, setOpen] = useState(false);
-
-    const { data: session } = authClient.useSession();
     const isAdmin = (session?.user as any)?.role === "ADMIN";
 
     const handleLogout = async () => {
@@ -117,17 +121,19 @@ export default function Navbar() {
 
                 {/* Right Side Icons */}
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="text-muted-foreground relative">
-                        <Bell className="w-5 h-5" />
-                        <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-background" />
-                    </Button>
+                    {session?.user?.id && (
+                        <NotificationsPopover
+                            swapRequests={swapRequests}
+                            userId={session.user.id}
+                        />
+                    )}
                     {session ? (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Avatar className="h-9 w-9 cursor-pointer ring-offset-2 ring-primary transition-all hover:ring-2">
                                     <AvatarImage src={session?.user.image || ""} />
                                     <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                                        {session?.user.name.split(" ").map((n) => n[0]).join("")}
+                                        {session?.user.name.split(" ").map((n: string) => n[0]).join("")}
                                     </AvatarFallback>
                                 </Avatar>
                             </DropdownMenuTrigger>

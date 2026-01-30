@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db"; // Your Drizzle + Neon client
 import { users, supervisions, usersToSupervisions } from "@/lib/db/schema";
-import { eq, inArray, asc } from "drizzle-orm";
+import { eq, inArray, asc, and, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { addWeeks, addMinutes } from "date-fns";
 
@@ -162,4 +162,91 @@ export async function updateSupervision(
     console.error("Update failed:", error);
     return { success: false, error: "Failed to update supervision" };
   }
+}
+
+/**
+ * Check if students have supervision conflicts at a given time
+ * Returns map of userId -> conflicting supervision details
+ */
+
+export async function checkSupervisionConflicts(
+  studentIds: string[],
+  startTime: Date,
+  endTime: Date,
+  excludeSupervisionId?: string
+) {
+  if (studentIds.length === 0) {
+    return {};
+  }
+
+  // Find all supervisions for these students that overlap with the given time
+  const conflicts: Record<string, any> = {};
+
+  for (const studentId of studentIds) {
+    // Get all supervisions this student is enrolled in
+    const studentSupervisions = await db
+      .select({
+        id: supervisions.id,
+        title: supervisions.title,
+        startsAt: supervisions.startsAt,
+        endsAt: supervisions.endsAt,
+        location: supervisions.location,
+      })
+      .from(supervisions)
+      .innerJoin(
+        usersToSupervisions,
+        eq(usersToSupervisions.supervisionId, supervisions.id)
+      )
+      .where(
+        and(
+          eq(usersToSupervisions.userId, studentId),
+          // Check for time overlap: (start1 < end2) AND (start2 < end1)
+          sql`${supervisions.startsAt} < ${endTime}`,
+          sql`${supervisions.endsAt} > ${startTime}`,
+          // Optionally exclude a specific supervision (for edit mode)
+          excludeSupervisionId
+            ? sql`${supervisions.id} != ${excludeSupervisionId}`
+            : sql`1=1`
+        )
+      );
+
+    if (studentSupervisions.length > 0) {
+      conflicts[studentId] = studentSupervisions;
+    }
+  }
+
+  return conflicts;
+}
+
+/**
+ * Get all supervisions for a specific date to help with conflict visualization
+ */
+export async function getSupervisionsForDate(date: Date) {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const daySupervisions = await db.query.supervisions.findMany({
+    where: and(
+      sql`${supervisions.startsAt} >= ${dayStart}`,
+      sql`${supervisions.startsAt} <= ${dayEnd}`
+    ),
+    with: {
+      students: {
+        with: {
+          user: {
+            columns: {
+              id: true,
+              full_name: true,
+            }
+          }
+        }
+      }
+    },
+    orderBy: (supervisions, { asc }) => [asc(supervisions.startsAt)]
+  });
+
+  return daySupervisions;
 }

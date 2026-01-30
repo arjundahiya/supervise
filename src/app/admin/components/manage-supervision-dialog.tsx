@@ -10,14 +10,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar as CalendarIcon, Loader2, Trash2 } from "lucide-react";
-import { format, set, differenceInMinutes } from "date-fns";
+import { Calendar as CalendarIcon, Loader2, Trash2, AlertCircle, Clock } from "lucide-react";
+import { format, set, differenceInMinutes, addMinutes } from "date-fns";
 import { cn } from "@/lib/utils";
-import { updateSupervision, deleteSupervision, getStudentsForSelection } from "@/app/actions/supervisions";
+import { updateSupervision, deleteSupervision, getStudentsForSelection, checkSupervisionConflicts } from "@/app/actions/supervisions";
 import { useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
-// Define the shape of the supervision prop
 interface ManageSupervisionProps {
   supervision: {
     id: string;
@@ -38,7 +37,6 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
 
   // Parse initial state
   const initialDuration = differenceInMinutes(supervision.endsAt, supervision.startsAt).toString();
-  // Extract pure description (remove "Supervisor: ..." hack if present)
   const cleanDescription = supervision.description?.replace(/Supervisor: .*\n\n/, '') || "";
 
   const [title, setTitle] = useState(supervision.title);
@@ -52,9 +50,11 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
   // Student Selection
   const [allStudents, setAllStudents] = useState<any[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>(supervision.students.map(s => s.id));
+  const [supervisionConflicts, setSupervisionConflicts] = useState<Record<string, any[]>>({});
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+  const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
 
-  // Load all students only when dialog opens (for adding new ones)
+  // Load all students only when dialog opens
   useEffect(() => {
     if (open && allStudents.length === 0) {
       setIsLoadingStudents(true);
@@ -63,6 +63,51 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
         .finally(() => setIsLoadingStudents(false));
     }
   }, [open]);
+
+  // Check for supervision conflicts whenever relevant fields change
+  useEffect(() => {
+    const checkConflicts = async () => {
+      if (!date || !time || allStudents.length === 0) {
+        setSupervisionConflicts({});
+        return;
+      }
+
+      setIsCheckingConflicts(true);
+      
+      const [hours, minutes] = time.split(":").map(Number);
+      const sessionStart = set(date, { hours, minutes });
+      const sessionEnd = addMinutes(sessionStart, parseInt(duration) || 60);
+
+      // Exclude current supervision from conflict check
+      const conflicts = await checkSupervisionConflicts(
+        allStudents.map(s => s.id),
+        sessionStart,
+        sessionEnd,
+        supervision.id // Exclude this supervision
+      );
+
+      setSupervisionConflicts(conflicts);
+      setIsCheckingConflicts(false);
+    };
+
+    checkConflicts();
+  }, [date, time, duration, allStudents, supervision.id]);
+
+  const checkSupervisionConflict = (studentId: string) => {
+    return supervisionConflicts[studentId] || null;
+  };
+
+  const getConflictInfo = (studentId: string) => {
+    const supConflicts = checkSupervisionConflict(studentId);
+    if (supConflicts && supConflicts.length > 0) {
+      return {
+        type: 'SUPERVISION' as const,
+        data: supConflicts[0],
+        count: supConflicts.length
+      };
+    }
+    return null;
+  };
 
   const handleSave = async () => {
     if (!date) return;
@@ -169,25 +214,59 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} />
             </div>
 
-            {/* Students */}
+            {/* Students with Conflict Detection */}
             <div className="space-y-2 border rounded-md p-3">
-                <Label>Enrolled Students ({selectedStudents.length})</Label>
+                <div className="flex justify-between items-center">
+                    <Label>Enrolled Students ({selectedStudents.length})</Label>
+                    {isCheckingConflicts && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                </div>
                 <div className="h-30 overflow-y-auto space-y-1 mt-2">
-                    {isLoadingStudents ? <Loader2 className="animate-spin h-4 w-4" /> : 
-                     allStudents.map(student => (
-                        <div key={student.id} className="flex items-center space-x-2">
-                            <Checkbox 
-                                id={`edit-${student.id}`} 
-                                checked={selectedStudents.includes(student.id)}
-                                onCheckedChange={(checked) => {
-                                    checked 
-                                      ? setSelectedStudents([...selectedStudents, student.id])
-                                      : setSelectedStudents(selectedStudents.filter(id => id !== student.id))
-                                }}
-                            />
-                            <Label htmlFor={`edit-${student.id}`}>{student.full_name}</Label>
-                        </div>
-                    ))}
+                    {isLoadingStudents ? (
+                        <Loader2 className="animate-spin h-4 w-4" />
+                    ) : (
+                        allStudents.map(student => {
+                            const conflict = getConflictInfo(student.id);
+                            
+                            return (
+                                <div 
+                                    key={student.id} 
+                                    className={cn(
+                                        "flex items-center space-x-2 p-2 rounded transition-colors border",
+                                        conflict 
+                                            ? "bg-red-50 border-red-200 hover:bg-red-100 dark:bg-red-950/20 dark:border-red-900/50" 
+                                            : "border-transparent hover:bg-muted/50"
+                                    )}
+                                >
+                                    <Checkbox 
+                                        id={`edit-${student.id}`} 
+                                        checked={selectedStudents.includes(student.id)}
+                                        onCheckedChange={(checked) => {
+                                            if(conflict && checked) {
+                                                const conflictMsg = `${student.full_name} already has a supervision at this time (${conflict.data.title}). Assign anyway?`;
+                                                if(!confirm(conflictMsg)) return;
+                                            }
+                                            checked 
+                                              ? setSelectedStudents([...selectedStudents, student.id])
+                                              : setSelectedStudents(selectedStudents.filter(id => id !== student.id))
+                                        }}
+                                    />
+                                    <div className="flex-1 flex justify-between items-center">
+                                        <Label htmlFor={`edit-${student.id}`} className="cursor-pointer font-normal">
+                                            {student.full_name}
+                                        </Label>
+                                        
+                                        {conflict && (
+                                            <div className="flex items-center text-red-600 dark:text-red-400 text-xs font-medium gap-1"
+                                                 title={`Already has: ${conflict.data.title}`}>
+                                                <Clock className="w-3 h-3" />
+                                                <span>Has Supervision</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
             </div>
         </div>

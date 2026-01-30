@@ -10,11 +10,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch"; // Ensure you have this component, or use a Checkbox
-import { Plus, Calendar as CalendarIcon, Search, Loader2, Repeat, AlertCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Calendar as CalendarIcon, Search, Loader2, Repeat, AlertCircle, Clock } from "lucide-react";
 import { areIntervalsOverlapping, format, set, addMinutes } from "date-fns";
 import { cn } from "@/lib/utils";
-import { createSupervision, getStudentsForSelection } from "@/app/actions/supervisions";
+import { createSupervision, getStudentsForSelection, checkSupervisionConflicts } from "@/app/actions/supervisions";
 import { getAvailabilityForDate } from "@/app/actions/availability";
 import { useRouter } from "next/navigation";
 
@@ -42,8 +42,10 @@ export function CreateSupervisionButton() {
   const [students, setStudents] = useState<any[]>([]); 
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dailyAvailability, setDailyAvailability] = useState<any[]>([]); // NEW
+  const [dailyAvailability, setDailyAvailability] = useState<any[]>([]);
+  const [supervisionConflicts, setSupervisionConflicts] = useState<Record<string, any[]>>({});
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+  const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -65,14 +67,41 @@ export function CreateSupervisionButton() {
     }
   }, [date]);
 
-  const checkConflict = (studentId: string) => {
+  // Check for supervision conflicts whenever date, time, or duration changes
+  useEffect(() => {
+    const checkConflicts = async () => {
+      if (!date || !time || students.length === 0) {
+        setSupervisionConflicts({});
+        return;
+      }
+
+      setIsCheckingConflicts(true);
+      
+      const [hours, minutes] = time.split(":").map(Number);
+      const sessionStart = set(date, { hours, minutes });
+      const sessionEnd = addMinutes(sessionStart, parseInt(duration) || 60);
+
+      const conflicts = await checkSupervisionConflicts(
+        students.map(s => s.id),
+        sessionStart,
+        sessionEnd
+      );
+
+      setSupervisionConflicts(conflicts);
+      setIsCheckingConflicts(false);
+    };
+
+    checkConflicts();
+  }, [date, time, duration, students]);
+
+  const checkAvailabilityConflict = (studentId: string) => {
     if (!date || !time) return null;
 
     const [hours, minutes] = time.split(":").map(Number);
     const sessionStart = set(date, { hours, minutes });
     const sessionEnd = addMinutes(sessionStart, parseInt(duration) || 60);
 
-    // Find overlapping slots
+    // Find overlapping availability slots
     const conflict = dailyAvailability.find(slot => {
       const isTimeOverlapping = areIntervalsOverlapping(
         { start: sessionStart, end: sessionEnd },
@@ -84,6 +113,34 @@ export function CreateSupervisionButton() {
     });
 
     return conflict;
+  };
+
+  const checkSupervisionConflict = (studentId: string) => {
+    return supervisionConflicts[studentId] || null;
+  };
+
+  const getConflictInfo = (studentId: string) => {
+    // Check supervision conflicts first (higher priority)
+    const supConflicts = checkSupervisionConflict(studentId);
+    if (supConflicts && supConflicts.length > 0) {
+      return {
+        type: 'SUPERVISION' as const,
+        data: supConflicts[0], // Show first conflict
+        count: supConflicts.length
+      };
+    }
+
+    // Then check availability conflicts
+    const availConflict = checkAvailabilityConflict(studentId);
+    if (availConflict) {
+      return {
+        type: availConflict.type === 'GLOBAL' ? 'HOLIDAY' as const : 'BUSY' as const,
+        data: availConflict,
+        count: 1
+      };
+    }
+
+    return null;
   };
 
   const handleSubmit = async () => {
@@ -104,9 +161,9 @@ export function CreateSupervisionButton() {
     // Combine selected date with selected time
     const startsAt = set(date, { hours, minutes });
     
-    // If recurring, ensure repeatUntil also has the correct time (for consistency, though logic mostly uses date part)
+    // If recurring, ensure repeatUntil also has the correct time
     const effectiveRepeatUntil = isRecurring && repeatUntil 
-        ? set(repeatUntil, { hours: 23, minutes: 59 }) // Set to end of that day to catch the session
+        ? set(repeatUntil, { hours: 23, minutes: 59 })
         : undefined;
 
     const result = await createSupervision({
@@ -247,7 +304,7 @@ export function CreateSupervisionButton() {
                                     mode="single" 
                                     selected={repeatUntil} 
                                     onSelect={setRepeatUntil} 
-                                    disabled={(date) => date < new Date()} // Prevent past dates
+                                    disabled={(date) => date < new Date()}
                                     initialFocus 
                                 />
                             </PopoverContent>
@@ -269,11 +326,14 @@ export function CreateSupervisionButton() {
                 />
             </div>
 
-            {/* Student Selector (Same as before) */}
+            {/* Student Selector */}
             <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
                 <div className="flex justify-between items-center">
                     <Label>Assign Students</Label>
-                    <span className="text-xs text-muted-foreground">{selectedStudents.length} selected</span>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedStudents.length} selected
+                      {isCheckingConflicts && <Loader2 className="inline-block ml-2 h-3 w-3 animate-spin" />}
+                    </span>
                 </div>
                 <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -285,17 +345,15 @@ export function CreateSupervisionButton() {
                         <div className="flex justify-center p-4"><Loader2 className="animate-spin h-5 w-5" /></div>
                     ) : (
                         filteredStudents.map(student => {
-                            // CHECK CONFLICT
-                            const conflict = checkConflict(student.id);
+                            const conflict = getConflictInfo(student.id);
                             
                             return (
                                 <div 
                                     key={student.id} 
                                     className={cn(
                                         "flex items-center space-x-2 p-2 rounded transition-colors border",
-                                        // RED BACKGROUND IF CONFLICT
                                         conflict 
-                                            ? "bg-red-50 border-red-200 hover:bg-red-100" 
+                                            ? "bg-red-50 border-red-200 hover:bg-red-100 dark:bg-red-950/20 dark:border-red-900/50" 
                                             : "border-transparent hover:bg-muted/50"
                                     )}
                                 >
@@ -304,7 +362,13 @@ export function CreateSupervisionButton() {
                                         checked={selectedStudents.includes(student.id)}
                                         onCheckedChange={(checked) => {
                                             if(conflict && checked) {
-                                                if(!confirm(`Warning: ${student.full_name} is busy at this time. Assign anyway?`)) return;
+                                                const conflictMsg = conflict.type === 'SUPERVISION'
+                                                  ? `${student.full_name} already has a supervision at this time (${conflict.data.title}). Assign anyway?`
+                                                  : conflict.type === 'HOLIDAY'
+                                                  ? `${student.full_name} has a holiday/break at this time. Assign anyway?`
+                                                  : `${student.full_name} marked themselves as busy at this time. Assign anyway?`;
+                                                
+                                                if(!confirm(conflictMsg)) return;
                                             }
                                             checked 
                                               ? setSelectedStudents([...selectedStudents, student.id])
@@ -316,13 +380,25 @@ export function CreateSupervisionButton() {
                                             {student.full_name}
                                         </Label>
                                         
-                                        {/* CONFLICT INDICATOR */}
+                                        {/* Conflict Indicator */}
                                         {conflict && (
-                                            <div className="flex items-center text-red-600 text-xs font-medium gap-1" title="User has availability blocked">
-                                                <AlertCircle className="w-3 h-3" />
-                                                <span>
-                                                    {conflict.type === 'GLOBAL' ? 'Holiday' : 'Busy'}
-                                                </span>
+                                            <div className="flex items-center text-red-600 dark:text-red-400 text-xs font-medium gap-1" 
+                                                 title={conflict.type === 'SUPERVISION' 
+                                                   ? `Already has: ${conflict.data.title}`
+                                                   : conflict.type === 'HOLIDAY' 
+                                                   ? 'Holiday/Break' 
+                                                   : 'Marked as busy'}>
+                                                {conflict.type === 'SUPERVISION' ? (
+                                                    <>
+                                                        <Clock className="w-3 h-3" />
+                                                        <span>Has Supervision</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <AlertCircle className="w-3 h-3" />
+                                                        <span>{conflict.type === 'HOLIDAY' ? 'Holiday' : 'Busy'}</span>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                     </div>

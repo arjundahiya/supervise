@@ -7,23 +7,24 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  MapPin, 
-  Users, 
-  Clock, 
-  ArrowRightLeft, 
+import {
+  MapPin,
+  Users,
+  Clock,
+  ArrowRightLeft,
   Calendar as CalendarIcon,
-  ChevronRight 
+  ChevronRight
 } from "lucide-react";
 import { format, isSameDay, startOfDay } from "date-fns";
 import { getUserAvailability } from "@/app/actions/availability";
 import { AvailabilityManager } from "./availability-manager";
 import { CalendarSyncButton } from "./calendar-sync-button";
+import { SwapRequestDialog } from "./swap-request-dialog";
 
 // --- Data Fetching ---
 async function getStudentSupervisions(userId: string) {
   const result = await db.query.supervisions.findMany({
-    where: (supervisions, { exists }) => 
+    where: (supervisions, { exists }) =>
       exists(
         db.select()
           .from(usersToSupervisions)
@@ -93,10 +94,11 @@ function SupervisionRow({ supervision, currentUserId }: { supervision: any, curr
         </div>
 
         {/* Action */}
-        <Button variant="ghost" size="sm" className="h-8 px-2 gap-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-          <ArrowRightLeft className="w-3.5 h-3.5" />
-          Swap
-        </Button>
+        <SwapRequestDialog
+          supervisionId={supervision.id}
+          supervisionTitle={supervision.title}
+          currentUserId={currentUserId}
+        />
       </div>
     </div>
   );
@@ -141,8 +143,8 @@ export default async function StudentDashboard() {
       <div className="space-y-8">
         {sortedDates.length === 0 ? (
           <div className="text-center py-20 border-2 border-dashed rounded-3xl">
-             <CalendarIcon className="mx-auto w-10 h-10 text-muted-foreground/40 mb-4" />
-             <p className="text-muted-foreground">No sessions found for the current term.</p>
+            <CalendarIcon className="mx-auto w-10 h-10 text-muted-foreground/40 mb-4" />
+            <p className="text-muted-foreground">No sessions found for the current term.</p>
           </div>
         ) : (
           sortedDates.map((dateStr) => (

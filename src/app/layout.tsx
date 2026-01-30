@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, IBM_Plex_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
-import Navbar from "./components/navbar";
+import NavbarWrapper from "./components/navbar-wrapper";
 import { SpeedInsights } from "@vercel/speed-insights/next"
 
 const geistSans = Geist({
@@ -29,7 +29,7 @@ export default function RootLayout({
       <body
         className={`${IBMSans.className} antialiased dark`}
       >
-        <Navbar />
+        <NavbarWrapper />
         <main className="flex-1 flex flex-col">
           {children}
         </main>
