@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { swapRequests, supervisions, usersToSupervisions, users } from "@/lib/db/schema";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { Resend } from 'resend';
 
 /**
  * Get all swap requests for a user (both sent and received)
@@ -98,7 +99,7 @@ export async function getPossibleSwapTargets(
   });
 
   // Flatten to list of potential swap partners
-  const potentialTargets = sameSeriesSupervisions.flatMap(supervision => 
+  const potentialTargets = sameSeriesSupervisions.flatMap(supervision =>
     supervision.students
       .filter(s => s.user.id !== currentUserId)
       .map(s => ({
@@ -113,13 +114,16 @@ export async function getPossibleSwapTargets(
   return { success: true, targets: potentialTargets };
 }
 
+const resend = new Resend(process.env.RESEND_API_KEY!);
+
 /**
  * Create a new swap request
  */
 export async function createSwapRequest(
   supervisionId: string,
   requesterId: string,
-  targetId: string
+  targetId: string,
+  targetEmail: string
 ) {
   try {
     // Check if a swap request already exists
@@ -144,6 +148,14 @@ export async function createSwapRequest(
     });
 
     revalidatePath("/dashboard");
+
+    resend.emails.send({
+      from: 'no-reply@supervise.arjun.run',
+      to: targetEmail,
+      subject: 'Swap Request',
+      html: '<p>Somebody has requested to swap supervisions with you. <a href="https://supervise-navy.vercel.app/">Login to Supervise</a> to accept or reject this.'
+    });
+
     return { success: true };
   } catch (error) {
     console.error("Failed to create swap request:", error);
@@ -184,7 +196,7 @@ export async function acceptSwapRequest(requestId: string, targetId: string) {
     });
 
     // Find the supervision with the same title as the requested one
-    const targetSupervision = targetSupervisions.find(ts => 
+    const targetSupervision = targetSupervisions.find(ts =>
       ts.supervision.title === request.supervision.title
     );
 

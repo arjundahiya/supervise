@@ -44,9 +44,9 @@ export function SwapRequestDialog({
     setIsLoading(false);
   };
 
-  const handleRequestSwap = async (targetId: string) => {
+  const handleRequestSwap = async (targetId: string, targetEmail: string) => {
     setIsSubmitting(true);
-    const result = await createSwapRequest(supervisionId, currentUserId, targetId);
+    const result = await createSwapRequest(supervisionId, currentUserId, targetId, targetEmail);
     
     if (result.success) {
       toast.success("Swap request sent!");
@@ -113,7 +113,7 @@ export function SwapRequestDialog({
                   </div>
                   <Button 
                     size="sm" 
-                    onClick={() => handleRequestSwap(target.id)}
+                    onClick={() => handleRequestSwap(target.id, target.email_address)}
                     disabled={isSubmitting}
                   >
                     Request
