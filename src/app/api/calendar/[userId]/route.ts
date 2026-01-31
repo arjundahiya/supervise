@@ -3,8 +3,9 @@ import { supervisions, usersToSupervisions } from "@/lib/db/schema";
 import { eq, and, gte, exists } from "drizzle-orm";
 import { createEvents, EventAttributes } from "ics";
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 
-export const dynamic = 'force-dynamic';
+export const CALENDAR_CACHE_TAG = "calendar-data";
 
 const generateIcs = (events: EventAttributes[]): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -15,19 +16,12 @@ const generateIcs = (events: EventAttributes[]): Promise<string> => {
   });
 };
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
-  try {
-    const { userId } = await params;
-
-    // 1. Fetch Supervisions where the student is present
-    // Logic: find supervisions where a row exists in usersToSupervisions for this user
+const fetchUserSupervisions = unstable_cache(
+  async (userId: string) => {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
-    const userSupervisions = await db
+    return await db
       .select()
       .from(supervisions)
       .where(
@@ -46,6 +40,24 @@ export async function GET(
           )
         )
       );
+  },
+  ["calendar-supervisions"],
+  {
+    tags: [CALENDAR_CACHE_TAG],
+    // Fallback revalidation every 60 minutes in case a tag revalidation is missed
+    revalidate: 3600,
+  }
+);
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const { userId } = await params;
+
+    // Fetch cached supervisions for this user
+    const userSupervisions = await fetchUserSupervisions(userId);
 
     // 2. Handle empty calendar case
     if (!userSupervisions || userSupervisions.length === 0) {
@@ -95,7 +107,6 @@ export async function GET(
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": `attachment; filename="supervisions.ics"`,
-        "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
 

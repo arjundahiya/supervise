@@ -3,8 +3,9 @@
 import { db } from "@/lib/db";
 import { swapRequests, supervisions, usersToSupervisions, users } from "@/lib/db/schema";
 import { eq, and, or, desc, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { Resend } from 'resend';
+import { CALENDAR_CACHE_TAG } from "@/app/api/calendar/[userId]/route";
 
 /**
  * Get all swap requests for a user (both sent and received)
@@ -252,6 +253,7 @@ export async function acceptSwapRequest(requestId: string, targetId: string) {
       .where(eq(swapRequests.id, requestId));
 
     revalidatePath("/dashboard");
+    revalidateTag(CALENDAR_CACHE_TAG, { expire: 0 });
     return { success: true };
   } catch (error) {
     console.error("Failed to accept swap:", error);

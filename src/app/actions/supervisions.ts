@@ -3,8 +3,9 @@
 import { db } from "@/lib/db"; // Your Drizzle + Neon client
 import { users, supervisions, usersToSupervisions } from "@/lib/db/schema";
 import { eq, inArray, asc, and, or, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { addWeeks, addMinutes } from "date-fns";
+import { CALENDAR_CACHE_TAG } from "@/app/api/calendar/[userId]/route";
 
 /**
  * Fetch all assignable users
@@ -83,6 +84,7 @@ export async function createSupervision(formData: {
 
     revalidatePath("/dashboard");
     revalidatePath("/admin");
+    revalidateTag(CALENDAR_CACHE_TAG, { expire: 0 });
     return { success: true, count: insertedSupervisions.length };
   } catch (error) {
     console.error("Failed to create supervision:", error);
@@ -101,6 +103,7 @@ export async function deleteSupervision(id: string) {
     
     revalidatePath("/dashboard");
     revalidatePath("/admin");
+    revalidateTag(CALENDAR_CACHE_TAG, { expire: 0 });
     return { success: true };
   } catch (error) {
     return { success: false, error: "Failed to delete" };
@@ -156,6 +159,7 @@ export async function updateSupervision(
 
     revalidatePath("/dashboard");
     revalidatePath("/admin");
+    revalidateTag(CALENDAR_CACHE_TAG, { expire: 0 });
     
     return { success: true };
   } catch (error) {
