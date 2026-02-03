@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { swapRequests, supervisions, usersToSupervisions, users } from "@/lib/db/schema";
+import { swapRequests, supervisions, usersToSupervisions, availabilities } from "@/lib/db/schema";
 import { eq, and, or, desc, sql, gte } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { Resend } from 'resend';
@@ -75,9 +75,6 @@ export async function getPossibleSwapTargets(
     return { success: false, error: "Supervision not found" };
   }
 
-  // Find other supervisions with the same title (same module/supervision series)
-  // but different IDs (different time slots)
-
   const now = new Date();
 
   const sameSeriesSupervisions = await db.query.supervisions.findMany({
@@ -103,20 +100,54 @@ export async function getPossibleSwapTargets(
     orderBy: [sql`${supervisions.startsAt} ASC`]
   });
 
-  // Flatten to list of potential swap partners
-  const potentialTargets = sameSeriesSupervisions.flatMap(supervision =>
-    supervision.students
-      .filter(s => s.user.id !== currentUserId)
-      .map(s => ({
-        ...s.user,
-        supervisionId: supervision.id,
-        supervisionTitle: supervision.title,
-        supervisionTime: supervision.startsAt,
-        supervisionLocation: supervision.location,
-      }))
+  // Check for availability conflicts for each potential swap
+  const potentialTargetsWithConflicts = await Promise.all(
+    sameSeriesSupervisions.flatMap(supervision =>
+      supervision.students
+        .filter(s => s.user.id !== currentUserId)
+        .map(async (s) => {
+          // Check if target would have availability conflicts during current user's supervision time
+          const targetConflicts = await db.query.availabilities.findMany({
+            where: and(
+              eq(availabilities.userId, s.user.id),
+              sql`${availabilities.startsAt} < ${currentSupervision.endsAt}`,
+              sql`${availabilities.endsAt} > ${currentSupervision.startsAt}`
+            )
+          });
+
+          // Check if current user would have availability conflicts during target's supervision time
+          const currentUserConflicts = await db.query.availabilities.findMany({
+            where: and(
+              eq(availabilities.userId, currentUserId),
+              sql`${availabilities.startsAt} < ${supervision.endsAt}`,
+              sql`${availabilities.endsAt} > ${supervision.startsAt}`
+            )
+          });
+
+          return {
+            ...s.user,
+            supervisionId: supervision.id,
+            supervisionTitle: supervision.title,
+            supervisionTime: supervision.startsAt,
+            supervisionLocation: supervision.location,
+            hasConflict: targetConflicts.length > 0 || currentUserConflicts.length > 0,
+            conflictReason: targetConflicts.length > 0 
+              ? 'Target is busy during your current supervision time' 
+              : currentUserConflicts.length > 0 
+              ? 'You are busy during their supervision time' 
+              : null,
+          };
+        })
+    )
   );
 
-  return { success: true, targets: potentialTargets };
+  const resolvedTargets = await Promise.all(potentialTargetsWithConflicts);
+  
+  return { 
+    success: true, 
+    availableTargets: resolvedTargets.filter(t => !t.hasConflict),
+    unavailableTargets: resolvedTargets.filter(t => t.hasConflict)
+  };
 }
 
 const resend = new Resend(process.env.RESEND_API_KEY!);

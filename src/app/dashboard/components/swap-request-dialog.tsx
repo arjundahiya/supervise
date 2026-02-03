@@ -23,7 +23,8 @@ export function SwapRequestDialog({
 }: SwapRequestDialogProps) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [targets, setTargets] = useState<any[]>([]);
+  const [validTargets, setValidTargets] = useState<any[]>([]);
+  const [invalidTargets, setInvalidTargets] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -36,8 +37,9 @@ export function SwapRequestDialog({
     setIsLoading(true);
     const result = await getPossibleSwapTargets(supervisionId, currentUserId);
     
-    if (result.success && result.targets) {
-      setTargets(result.targets);
+    if (result.success && result.availableTargets && result.unavailableTargets) {
+      setValidTargets(result.availableTargets);
+      setInvalidTargets(result.unavailableTargets);
     } else {
       toast.error("Failed to load swap options");
     }
@@ -78,14 +80,14 @@ export function SwapRequestDialog({
             <div className="flex justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : targets.length === 0 ? (
+          ) : (validTargets.length === 0 && invalidTargets.length === 0) ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               <CalendarClock className="w-10 h-10 mx-auto mb-3 opacity-20" />
               <p>No other students enrolled in this supervision series.</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-100 overflow-y-auto pr-2">
-              {targets.map((target) => (
+              {validTargets.map((target) => (
                 <div 
                   key={`${target.id}-${target.supervisionId}`}
                   className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
@@ -117,6 +119,41 @@ export function SwapRequestDialog({
                     disabled={isSubmitting}
                   >
                     Request
+                  </Button>
+                </div>
+              ))}
+              {invalidTargets.map((target) => (
+                <div 
+                  key={`${target.id}-${target.supervisionId}`}
+                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={target.image || ""} />
+                      <AvatarFallback className="text-xs">
+                        {target.full_name.split(" ").map((n: string) => n[0]).join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="space-y-1">
+                      <p className="font-medium text-sm leading-none">{target.full_name}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                          {format(new Date(target.supervisionTime), "EEE, d MMM 'at' h:mm a")}
+                        </Badge>
+                        {target.supervisionLocation && (
+                          <span className="text-[10px] text-muted-foreground">
+                            @ {target.supervisionLocation}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm"
+                    variant="outline"
+                    disabled={true}
+                  >
+                    Conflicts
                   </Button>
                 </div>
               ))}
