@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { swapRequests, supervisions, usersToSupervisions, users } from "@/lib/db/schema";
-import { eq, and, or, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, sql, gte } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { Resend } from 'resend';
 import { CALENDAR_CACHE_TAG } from "@/app/api/calendar/[userId]/route";
@@ -77,10 +77,14 @@ export async function getPossibleSwapTargets(
 
   // Find other supervisions with the same title (same module/supervision series)
   // but different IDs (different time slots)
+
+  const now = new Date();
+
   const sameSeriesSupervisions = await db.query.supervisions.findMany({
     where: and(
       eq(supervisions.title, currentSupervision.title),
-      sql`${supervisions.id} != ${supervisionId}`
+      sql`${supervisions.id} != ${supervisionId}`,
+      gte(supervisions.startsAt, now)
     ),
     with: {
       students: {
