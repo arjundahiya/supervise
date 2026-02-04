@@ -16,7 +16,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { LogOut, LayoutDashboard, ShieldCheck, Bell, Menu, X } from "lucide-react";
+import { LogOut, LayoutDashboard, ShieldCheck, Bell, Menu, X, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationsPopover } from "./notifications-popover";
 
@@ -44,6 +44,7 @@ export default function Navbar({ session, swapRequests }: NavbarProps) {
 
     const navLinks = [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/calendar", label: "Calendar", icon: Calendar },
         ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
     ];
 
