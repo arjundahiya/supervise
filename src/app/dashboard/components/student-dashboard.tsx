@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { supervisions, usersToSupervisions } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,11 @@ import { SwapRequestDialog } from "./swap-request-dialog";
 
 // --- Data Fetching ---
 async function getStudentSupervisions(userId: string) {
+  const now = new Date();
   const result = await db.query.supervisions.findMany({
     where: (supervisions, { exists }) =>
+      and(
+      gte(supervisions.endsAt, now),
       exists(
         db.select()
           .from(usersToSupervisions)
@@ -34,7 +37,7 @@ async function getStudentSupervisions(userId: string) {
               eq(usersToSupervisions.userId, userId)
             )
           )
-      ),
+      )),
     with: {
       students: { with: { user: true } },
     },
@@ -56,7 +59,7 @@ function SupervisionRow({ supervision, currentUserId }: { supervision: any, curr
     <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-card border rounded-xl hover:shadow-md transition-all gap-4">
       <div className="flex items-start gap-4">
         {/* Time Column */}
-        <div className="flex flex-col items-center justify-center min-w-[80px] py-2 bg-muted/50 rounded-lg text-secondary-foreground">
+        <div className="flex flex-col items-center justify-center min-w-20 py-2 bg-muted/50 rounded-lg text-secondary-foreground">
           <span className="text-sm font-bold">{format(supervision.startsAt, "h:mm")}</span>
           <span className="text-[10px] uppercase opacity-60">{format(supervision.startsAt, "a")}</span>
         </div>
@@ -114,10 +117,9 @@ export default async function StudentDashboard() {
   ]);
 
   const now = new Date();
-  const upcoming = supervisions.filter(s => s.endsAt >= now);
-
+  
   // Grouping logic: Create an object where keys are date strings
-  const groupedSupervisions = upcoming.reduce((acc: any, supervision) => {
+  const groupedSupervisions = supervisions.reduce((acc: any, supervision) => {
     const dateKey = startOfDay(supervision.startsAt).toISOString();
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(supervision);
