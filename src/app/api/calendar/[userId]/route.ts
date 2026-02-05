@@ -44,8 +44,8 @@ const fetchUserSupervisions = unstable_cache(
   ["calendar-supervisions"],
   {
     tags: [CALENDAR_CACHE_TAG],
-    // Fallback revalidation every 60 minutes in case a tag revalidation is missed
-    revalidate: 3600,
+    // Fallback revalidation every 6 hours in case a tag revalidation is missed
+    revalidate: 21600,
   }
 );
 
