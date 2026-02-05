@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { unstable_cache } from "next/cache";
+import { CALENDAR_CACHE_TAG } from "@/app/api/calendar/[userId]/route";
 import { db } from "@/lib/db";
 import { supervisions, usersToSupervisions } from "@/lib/db/schema";
 import { eq, and, gte } from "drizzle-orm";
@@ -21,23 +23,24 @@ import { AvailabilityManager } from "./availability-manager";
 import { CalendarSyncButton } from "./calendar-sync-button";
 import { SwapRequestDialog } from "./swap-request-dialog";
 
+
 // --- Data Fetching ---
 async function getStudentSupervisions(userId: string) {
   const now = new Date();
   const result = await db.query.supervisions.findMany({
     where: (supervisions, { exists }) =>
       and(
-      gte(supervisions.endsAt, now),
-      exists(
-        db.select()
-          .from(usersToSupervisions)
-          .where(
-            and(
-              eq(usersToSupervisions.supervisionId, supervisions.id),
-              eq(usersToSupervisions.userId, userId)
+        gte(supervisions.endsAt, now),
+        exists(
+          db.select()
+            .from(usersToSupervisions)
+            .where(
+              and(
+                eq(usersToSupervisions.supervisionId, supervisions.id),
+                eq(usersToSupervisions.userId, userId)
+              )
             )
-          )
-      )),
+        )),
     with: {
       students: { with: { user: true } },
     },
@@ -49,6 +52,15 @@ async function getStudentSupervisions(userId: string) {
     students: s.students.map(rel => rel.user),
   }));
 }
+
+const getCachedStudentSupervisions = unstable_cache(
+  async (userId: string) => getStudentSupervisions(userId),
+  ['student-supervisions'],
+  {
+    tags: [CALENDAR_CACHE_TAG],
+    revalidate: 120 // 2 minutes
+  }
+);
 
 // --- Components ---
 
@@ -112,12 +124,12 @@ export default async function StudentDashboard() {
   if (!session) redirect("/");
 
   const [supervisions, availability] = await Promise.all([
-    getStudentSupervisions(session.user.id),
+    getCachedStudentSupervisions(session.user.id),
     getUserAvailability(session.user.id)
   ]);
 
   const now = new Date();
-  
+
   // Grouping logic: Create an object where keys are date strings
   const groupedSupervisions = supervisions.reduce((acc: any, supervision) => {
     const dateKey = startOfDay(supervision.startsAt).toISOString();
