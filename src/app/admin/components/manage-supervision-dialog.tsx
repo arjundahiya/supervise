@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { updateSupervision, deleteSupervision, getStudentsForSelection, checkSupervisionConflicts } from "@/app/actions/supervisions";
 import { useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { getCachedStudents } from "@/app/actions/students";
 
 interface ManageSupervisionProps {
   supervision: {
@@ -56,13 +57,14 @@ export function ManageSupervisionDialog({ supervision }: ManageSupervisionProps)
 
   // Load all students only when dialog opens
   useEffect(() => {
-    if (open && allStudents.length === 0) {
-      setIsLoadingStudents(true);
-      getStudentsForSelection()
-        .then(setAllStudents)
-        .finally(() => setIsLoadingStudents(false));
-    }
-  }, [open]);
+  if (open) {
+    setIsLoadingStudents(true);
+    getCachedStudents()
+      .then(setAllStudents)
+      .catch(console.error)
+      .finally(() => setIsLoadingStudents(false));
+  }
+}, [open]);
 
   // Check for supervision conflicts whenever relevant fields change
   useEffect(() => {

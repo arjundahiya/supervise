@@ -7,6 +7,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { Resend } from 'resend';
 import { CALENDAR_CACHE_TAG } from "@/app/api/calendar/[userId]/route";
 
+const SWAP_REQUESTS_CACHE_TAG = 'swap-requests';
+
 /**
  * Get all swap requests for a user (both sent and received)
  */
@@ -184,6 +186,7 @@ export async function createSwapRequest(
     });
 
     revalidatePath("/dashboard");
+    revalidateTag(SWAP_REQUESTS_CACHE_TAG, { expire: 0 });
 
     resend.emails.send({
       from: 'no-reply@supervise.arjun.run',
@@ -289,6 +292,8 @@ export async function acceptSwapRequest(requestId: string, targetId: string) {
 
     revalidatePath("/dashboard");
     revalidateTag(CALENDAR_CACHE_TAG, { expire: 0 });
+    revalidateTag(SWAP_REQUESTS_CACHE_TAG, { expire: 0 });
+
     return { success: true };
   } catch (error) {
     console.error("Failed to accept swap:", error);
@@ -322,6 +327,7 @@ export async function rejectSwapRequest(requestId: string, targetId: string) {
       .where(eq(swapRequests.id, requestId));
 
     revalidatePath("/dashboard");
+    revalidateTag(SWAP_REQUESTS_CACHE_TAG, { expire: 0 });
     return { success: true };
   } catch (error) {
     console.error("Failed to reject swap:", error);
@@ -355,6 +361,7 @@ export async function cancelSwapRequest(requestId: string, requesterId: string) 
       .where(eq(swapRequests.id, requestId));
 
     revalidatePath("/dashboard");
+    revalidateTag(SWAP_REQUESTS_CACHE_TAG, { expire: 0 });
     return { success: true };
   } catch (error) {
     console.error("Failed to cancel swap:", error);

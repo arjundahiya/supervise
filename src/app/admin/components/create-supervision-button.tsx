@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { createSupervision, getStudentsForSelection, checkSupervisionConflicts } from "@/app/actions/supervisions";
 import { getAvailabilityForDate } from "@/app/actions/availability";
 import { useRouter } from "next/navigation";
+import { getCachedStudents } from "@/app/actions/students";
 
 export function CreateSupervisionButton() {
   const [open, setOpen] = useState(false);
@@ -48,14 +49,14 @@ export function CreateSupervisionButton() {
   const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setIsLoadingStudents(true);
-      getStudentsForSelection()
-        .then(setStudents)
-        .catch(console.error)
-        .finally(() => setIsLoadingStudents(false));
-    }
-  }, [open]);
+  if (open) {
+    setIsLoadingStudents(true);
+    getCachedStudents()
+      .then(setStudents)
+      .catch(console.error)
+      .finally(() => setIsLoadingStudents(false));
+  }
+}, [open]);
 
   useEffect(() => {
     if (date) {
