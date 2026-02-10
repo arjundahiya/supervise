@@ -23,7 +23,7 @@ interface ManageSupervisionProps {
     id: string;
     title: string;
     location: string;
-    description: string;
+    description: string | null;
     startsAt: Date;
     endsAt: Date;
     supervisorName: string;

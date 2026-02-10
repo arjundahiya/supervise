@@ -45,6 +45,7 @@ export default function Navbar({ session, swapRequests }: NavbarProps) {
     const navLinks = [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
+        ...(isAdmin ? [{ href: "/admin-new", label: "Admin (New)", icon: ShieldCheck }] : []),
     ];
 
     return (
