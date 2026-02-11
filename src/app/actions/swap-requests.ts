@@ -192,7 +192,7 @@ export async function createSwapRequest(
       from: 'no-reply@supervise.arjun.run',
       to: targetEmail,
       subject: 'Swap Request',
-      html: '<p>Somebody has requested to swap supervisions with you. <a href="https://supervise-navy.vercel.app/">Login to Supervise</a> to accept or reject this.'
+      html: '<p>Somebody has requested to swap supervisions with you. Login to Supervise to accept or reject this.</p>'
     });
 
     return { success: true };
