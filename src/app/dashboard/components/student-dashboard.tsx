@@ -1,3 +1,5 @@
+"use client";
+
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { unstable_cache } from "next/cache";
@@ -22,6 +24,7 @@ import { getUserAvailability } from "@/app/actions/availability";
 import { AvailabilityManager } from "./availability-manager";
 import { CalendarSyncButton } from "./calendar-sync-button";
 import { SwapRequestDialog } from "./swap-request-dialog";
+import { formatInTimeZone } from "date-fns-tz";
 
 
 // --- Data Fetching ---
@@ -72,8 +75,8 @@ function SupervisionRow({ supervision, currentUserId }: { supervision: any, curr
       <div className="flex items-start gap-4">
         {/* Time Column */}
         <div className="flex flex-col items-center justify-center min-w-20 py-2 bg-muted/50 rounded-lg text-secondary-foreground">
-          <span className="text-sm font-bold">{format(supervision.startsAt, "h:mm")}</span>
-          <span className="text-[10px] uppercase opacity-60">{format(supervision.startsAt, "a")}</span>
+          <span className="text-sm font-bold">{formatInTimeZone(supervision.startsAt, "Europe/London", "h:mm")}</span>
+          <span className="text-[10px] uppercase opacity-60">{formatInTimeZone(supervision.startsAt, "Europe/London", "a")}</span>
         </div>
 
         {/* Info Column */}
@@ -84,7 +87,7 @@ function SupervisionRow({ supervision, currentUserId }: { supervision: any, curr
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
-              {format(supervision.startsAt, "h:mm a")} - {format(supervision.endsAt, "h:mm a")}
+              {formatInTimeZone(supervision.startsAt, "Europe/London","h:mm a")} - {formatInTimeZone(supervision.endsAt, "Europe/London", "h:mm a")}
             </span>
             <span className="flex items-center gap-1">
               <MapPin className="w-3 h-3" />
@@ -165,7 +168,7 @@ export default async function StudentDashboard() {
             <div key={dateStr} className="space-y-3">
               <h2 className="text-sm font-bold text-muted-foreground flex items-center gap-2 px-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                {format(new Date(dateStr), "EEEE, d MMMM")}
+                {formatInTimeZone(new Date(dateStr), "Europe/London", "EEEE, d MMMM")}
                 {isSameDay(new Date(dateStr), now) && (
                   <Badge variant="secondary" className="text-[10px] h-4">Today</Badge>
                 )}
