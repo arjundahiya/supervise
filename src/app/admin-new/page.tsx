@@ -13,7 +13,7 @@ import { BookOpen, TrendingUp, Users, Clock } from "lucide-react";
 import { CreateSupervisionButton } from "../admin/components/create-supervision-button";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
-
+import { redirect } from "next/navigation";
 // --- Real Data Fetching with Drizzle ---
 async function getAdminData() {
   const result = await db.query.supervisions.findMany({
@@ -52,7 +52,7 @@ export default async function AdminDashboard() {
   const session = await auth.api.getSession({ headers: await headers() });
 
   // Security check
-  // if (session?.user.role !== "ADMIN") redirect("/");
+  if (session?.user.role !== "ADMIN") redirect("/");
 
   const supervisions = await getAdminData();
   const now = new Date();
