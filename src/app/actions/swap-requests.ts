@@ -133,20 +133,20 @@ export async function getPossibleSwapTargets(
             supervisionTime: supervision.startsAt,
             supervisionLocation: supervision.location,
             hasConflict: targetConflicts.length > 0 || currentUserConflicts.length > 0,
-            conflictReason: targetConflicts.length > 0 
-              ? 'Target is busy during your current supervision time' 
-              : currentUserConflicts.length > 0 
-              ? 'You are busy during their supervision time' 
-              : null,
+            conflictReason: targetConflicts.length > 0
+              ? 'Target is busy during your current supervision time'
+              : currentUserConflicts.length > 0
+                ? 'You are busy during their supervision time'
+                : null,
           };
         })
     )
   );
 
   const resolvedTargets = await Promise.all(potentialTargetsWithConflicts);
-  
-  return { 
-    success: true, 
+
+  return {
+    success: true,
     availableTargets: resolvedTargets.filter(t => !t.hasConflict),
     unavailableTargets: resolvedTargets.filter(t => t.hasConflict)
   };
@@ -289,6 +289,19 @@ export async function acceptSwapRequest(requestId: string, targetId: string) {
         respondedAt: new Date(),
       })
       .where(eq(swapRequests.id, requestId));
+
+
+    await db
+      .update(swapRequests)
+      .set({ status: "CANCELLED", respondedAt: new Date() })
+      .where(
+        and(
+          eq(swapRequests.supervisionId, request.supervisionId),
+          eq(swapRequests.requesterId, request.requesterId),
+          eq(swapRequests.status, "PENDING"),
+          sql`${swapRequests.id} != ${requestId}`
+        )
+      );
 
     revalidatePath("/dashboard");
     revalidateTag(CALENDAR_CACHE_TAG, { expire: 0 });
